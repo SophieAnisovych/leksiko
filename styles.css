@@ -550,3 +550,13 @@ button.word-row {
   .card, .drawer, .scrim, .menu-btn span, .menu-open .menu-btn span { transition: none; }
   .sheet { animation: none; }
 }
+
+/* Landscape: the card turns sideways to match the screen. */
+@media (orientation: landscape) {
+  .scene { aspect-ratio: 25 / 17; }
+  .scene, .answers { width: min(100%, calc(56svh * 25 / 17), 900px); }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .scene, .answers { width: min(100%, calc(46svh * 25 / 17), 900px); }
+  .view-cards { gap: 10px; padding-block: 10px; }
+}
