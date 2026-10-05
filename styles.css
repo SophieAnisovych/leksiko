@@ -596,7 +596,8 @@ button.word-row {
   overflow-wrap: anywhere;
   transition: background-color .2s ease, color .2s ease, opacity .2s ease;
 }
-.opt:hover:not(:disabled) { background: var(--sand); }
+/* Only on devices with a real pointer: on a touchscreen :hover sticks to whatever is under the last tap. */
+@media (hover: hover) { .opt:hover:not(:disabled) { background: var(--sand); } }
 .opt:disabled { cursor: default; }
 .opt.right { background: var(--deep-olive); color: var(--linen); }
 .opt.wrong { border-color: #8a4f35; color: #8a4f35; text-decoration: line-through; text-decoration-thickness: 1px; }
