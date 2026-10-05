@@ -418,8 +418,8 @@
         </div>
         <p class="page-note">${editing ? 'Tap a word to edit it' : plural(ws.length)}</p>
         ${ws.length && !editing ? `<div class="cat-actions">
-          <button class="btn-save" type="button" id="study-this">Study these cards</button>
-          <button class="btn-outline" type="button" id="test-this">Test me</button>
+          <button class="btn-save" type="button" id="study-this">Study this category</button>
+          <button class="btn-outline" type="button" id="test-this">Test this category</button>
         </div>` : ''}
         ${ws.length ? `<ul class="rows">
           ${ws.map(w => `
