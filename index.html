@@ -28,6 +28,13 @@
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       navigator.serviceWorker.register('sw.js').catch(() => {});
+      // When a new version takes over, reload once so it shows straight away.
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloaded || !navigator.serviceWorker.controller) return;
+        reloaded = true;
+        location.reload();
+      });
     }
   </script>
 </body>

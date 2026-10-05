@@ -1,5 +1,5 @@
 // Keeps Λέξεις working offline. Bump CACHE when you want every device to drop its old copy.
-const CACHE = 'lexeis-v4';
+const CACHE = 'lexeis-v5';
 const APP_FILES = [
   './',
   'index.html',
@@ -13,7 +13,12 @@ const APP_FILES = [
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(APP_FILES)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's own HTTP cache, so a new version never stores old files.
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache => cache.addAll(APP_FILES.map(f => new Request(f, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', event => {
@@ -24,23 +29,32 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Serve from the cache straight away, then refresh the cached copy in the background,
-// so the app opens offline and picks up changes from GitHub on the next launch.
-// Fonts and the file-import libraries are cached the first time they load.
+// The app's own files: always try the network first so updates show up right away,
+// and fall back to the saved copy when offline.
+// Fonts and the file-import libraries never change, so they come from the saved copy first.
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  const cacheable = url.origin === self.location.origin
-    || ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'].includes(url.hostname);
-  if (!cacheable) return;
-  event.respondWith(
-    caches.open(CACHE).then(async cache => {
-      const cached = await cache.match(req, { ignoreSearch: url.origin === self.location.origin });
-      const fresh = fetch(req)
-        .then(res => { if (res.ok || res.type === 'opaque') cache.put(req, res.clone()); return res; })
-        .catch(() => cached);
-      return cached || fresh;
-    })
-  );
+
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      fetch(req, { cache: 'no-cache' })
+        .then(res => {
+          if (res.ok) caches.open(CACHE).then(cache => cache.put(req, res.clone()));
+          return res;
+        })
+        .catch(() => caches.match(req, { ignoreSearch: true }))
+    );
+    return;
+  }
+
+  if (['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'].includes(url.hostname)) {
+    event.respondWith(
+      caches.match(req).then(cached => cached || fetch(req).then(res => {
+        if (res.ok || res.type === 'opaque') caches.open(CACHE).then(cache => cache.put(req, res.clone()));
+        return res;
+      }))
+    );
+  }
 });
