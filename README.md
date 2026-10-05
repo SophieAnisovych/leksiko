@@ -7,6 +7,14 @@ A small flashcard app for learning Greek. Each card shows the Greek word with it
 - **On your computer:** open `index.html` in a browser.
 - **Online with GitHub Pages:** in the repository, go to **Settings → Pages**, set **Source** to *Deploy from a branch*, pick `main` and `/ (root)`, and save. The app appears at `https://<your-username>.github.io/<repo-name>/` after a minute.
 
+## Install it as an app
+
+Once GitHub Pages is on, open the site in Safari on your iPad or iPhone, tap **Share → Add to Home Screen**, then **Add**. Λέξεις gets its own icon and opens full-screen like any other app. On Android, open it in Chrome and tap **Install app**.
+
+It works offline after the first launch. Updates you push to GitHub reach the app the next time it's opened with internet.
+
+The home-screen app keeps its own saved words, separate from the Safari page, so pick one and stick with it.
+
 ## What's inside
 
 | File | What it is |
@@ -15,6 +23,8 @@ A small flashcard app for learning Greek. Each card shows the Greek word with it
 | `styles.css` | Colours (Mediterranean Calm palette), fonts and layout |
 | `app.js` | Cards, categories, editing, Add words and file import |
 | `data/words.js` | The starting word list: 538 words in 19 categories |
+| `manifest.json`, `icons/` | App name, colours and home-screen icon |
+| `sw.js` | Keeps the app working offline |
 
 ## Using it
 
