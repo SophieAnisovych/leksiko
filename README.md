@@ -22,7 +22,7 @@ The home-screen app keeps its own saved words, separate from the Safari page, so
 | `index.html` | The page |
 | `styles.css` | Colours (Mediterranean Calm palette), fonts and layout |
 | `app.js` | Cards, categories, editing, Add words and file import |
-| `data/words.js` | The starting word list: 538 words in 19 categories |
+| `data/words.js` | The starting word list: 534 words in 20 categories |
 | `manifest.json`, `icons/` | App name, colours and home-screen icon |
 | `sw.js` | Keeps the app working offline |
 
@@ -33,9 +33,20 @@ The home-screen app keeps its own saved words, separate from the Safari page, so
 - **Menu → Add words:** type the Greek and the translation. The pronunciation fills in automatically from Greek spelling rules, and the category can be chosen for you.
 - **Import a file:** `.txt`, `.csv`, `.xlsx`, `.pdf` or `.docx` with one word per line, such as `η πόλη = city` or `η πόλη<TAB>city<TAB>City & transport`. You review the list before anything is added.
 
+## Learning
+
+- Swipe right (**Knew it**) or left (**Didn't know**). A word goes **New → Absorbing** on its first swipe and becomes **Solid** after three "knew it" in a row.
+- Solid words come back for review after 3, 7, 21 and 60 days. A "didn't know" sends a word back to Absorbing.
+- Tap the speaker on a card, or any word in a category, to hear it with the device's Greek voice. If nothing plays on an iPad, add a voice in **Settings → Accessibility → Spoken Content → Voices → Greek**.
+- **Test** asks multiple-choice or flip-and-check questions. Multiple-choice answers can move a word forward but never make it Solid; flip-and-check counts fully.
+
 ## Where your changes are saved
 
-Edits and new words are saved in the browser you use (localStorage), so they stay on that device. To keep them in the repository, open **Categories**, tap **Download word list (words.js)** at the bottom, and replace `data/words.js` in the repo with the downloaded file.
+Words and progress are saved in the browser you use (localStorage), on that device only. Use **Categories → Backup → Download backup** now and then; **Restore from backup** brings it back on the same or another device. A backup is a valid `words.js`, so it can also replace `data/words.js` in the repo.
+
+## Updating the word list
+
+When `data/words.js` changes, every device merges the update on its next launch: new words are added (unless you deleted them), and nothing you've learned or edited is overwritten. To change or remove existing words, raise `rev` and describe the change in `changes` (see revision 2 in the file for an example). Give new words ids that aren't used yet.
 
 ## Differences from the Claude version
 

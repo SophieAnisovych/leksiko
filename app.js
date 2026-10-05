@@ -1,11 +1,74 @@
 (() => {
   const STORAGE_KEY = 'lexeis-words-v1';
-  // Your edits live in this browser (localStorage). data/words.js is the starting list.
+  const SEED = window.LEXEIS_DATA || { rev: 1, cats: [], words: [] };
+  const clone = x => JSON.parse(JSON.stringify(x));
+  // Ids for things made on this device can never clash with ids in data/words.js.
+  const newId = prefix => prefix + 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  // Your words and progress live in this browser (localStorage). data/words.js is the
+  // starting list. When it gets new words or fixes, they are merged into what's saved
+  // here on the next launch, without touching your progress or your own edits.
   const state = (() => {
-    try { const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (saved && Array.isArray(saved.words)) return saved; } catch {}
-    return JSON.parse(JSON.stringify(window.LEXEIS_DATA || { cats: [], words: [] }));
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch {}
+    if (!saved || !Array.isArray(saved.words) || !Array.isArray(saved.cats)) {
+      const fresh = clone(SEED);
+      delete fresh.changes;
+      fresh.cats.forEach(c => delete c.since);
+      return fresh;
+    }
+    mergeSeed(saved, SEED);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch {}
+    return saved;
   })();
-  // state = { cats: [{id, name}], words: [{id, g, p, e, c, n?}] }
+  state.deleted = state.deleted || [];
+  state.deletedCats = state.deletedCats || [];
+  // state = { rev, cats: [{id, name}], words: [{id, g, p, e, c, n?, s?, k?, l?, d?}], deleted, deletedCats }
+
+  function mergeSeed(saved, seed) {
+    const norm = g => String(g || '').toLowerCase().normalize('NFC').replace(/[!;.…?¿,]/g, '').replace(/\s+/g, ' ').trim();
+    const had = saved.rev || 1;
+    const deleted = new Set(saved.deleted || []);
+    const deletedCats = new Set(saved.deletedCats || []);
+    const catMap = {};
+    for (const c of seed.cats || []) {
+      const existing = saved.cats.find(x => x.id === c.id);
+      const isNew = (c.since || 1) > had;
+      if (existing && !isNew) { catMap[c.id] = c.id; continue; }
+      if (!isNew || deletedCats.has(c.id)) continue;
+      const byName = saved.cats.find(x => x.name.toLowerCase() === c.name.toLowerCase());
+      if (byName) { catMap[c.id] = byName.id; continue; }
+      const id = existing ? newId('c') : c.id;
+      saved.cats.push({ id, name: c.name });
+      catMap[c.id] = id;
+    }
+    for (const ch of seed.changes || []) {
+      if (ch.rev <= had) continue;
+      const gone = new Set(ch.removeWords || []);
+      saved.words = saved.words.filter(w => !gone.has(w.id));
+      for (const [id, field, oldV, newV0] of ch.set || []) {
+        const w = saved.words.find(x => x.id === id);
+        if (!w) continue;
+        if ((w[field] ?? null) !== (oldV ?? null)) continue; // changed on this device: keep it
+        const newV = field === 'c' ? (catMap[newV0] || newV0) : newV0;
+        if (newV == null) delete w[field]; else w[field] = newV;
+      }
+      for (const cid of ch.removeCats || []) {
+        if (!saved.words.some(w => w.c === cid)) saved.cats = saved.cats.filter(c => c.id !== cid);
+      }
+    }
+    // Add list words this device doesn't have yet (skipping ones you deleted).
+    const haveG = new Set(saved.words.map(w => norm(w.g)));
+    const haveId = new Set(saved.words.map(w => w.id));
+    for (const w of seed.words || []) {
+      if (haveId.has(w.id) || deleted.has(w.id) || haveG.has(norm(w.g))) continue;
+      const c = catMap[w.c] || (saved.cats.some(x => x.id === w.c) ? w.c : null);
+      if (!c) continue;
+      saved.words.push({ ...clone(w), c });
+      haveG.add(norm(w.g));
+    }
+    saved.rev = Math.max(had, seed.rev || 1);
+  }
 
   const $ = (sel, el = document) => el.querySelector(sel);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -13,7 +76,6 @@
   const catByName = name => state.cats.find(c => c.name.toLowerCase() === String(name || '').trim().toLowerCase());
   const wordsIn = id => state.words.filter(w => w.c === id);
   const plural = n => n + (n === 1 ? ' word' : ' words');
-  const nextId = (list, prefix) => prefix + (Math.max(0, ...list.map(x => parseInt(x.id.slice(1), 10) || 0)) + 1);
   const normGreek = g => String(g || '').toLowerCase().normalize('NFC').replace(/[!;.…?¿,]/g, '').replace(/\s+/g, ' ').trim();
   const hasGreek = s => /[Ͱ-Ͽἀ-῿]/.test(s);
 
@@ -182,10 +244,36 @@
     if (h === 'categories') renderCategories();
     else if (h === 'add') renderAdd();
     else if (h === 'test') renderTest();
-    else if (/^c\d+$/.test(h) && catById(h)) renderCategory(h);
+    else if (/^c[a-z0-9]+$/.test(h) && catById(h)) renderCategory(h);
     else renderCards();
   }
   window.addEventListener('hashchange', () => { editing = false; route(); });
+
+  /* ---------- Sound: the device's own Greek voice ---------- */
+  const synth = window.speechSynthesis;
+  let greekVoice = null;
+  const pickVoice = () => {
+    const voices = synth?.getVoices() || [];
+    greekVoice = voices.find(v => /^el[-_]GR/i.test(v.lang)) || voices.find(v => /^el/i.test(v.lang)) || null;
+  };
+  if (synth) { pickVoice(); synth.addEventListener?.('voiceschanged', pickVoice); }
+  const SPEAKER = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M3 8h3l4-3.5v11L6 12H3z" fill="currentColor" stroke-linejoin="round"/><path d="M13 7.2a4 4 0 0 1 0 5.6M15.3 5a7 7 0 0 1 0 10" stroke-linecap="round"/></svg>';
+  function speakGreek(text) {
+    if (!synth) return;
+    if (!greekVoice) pickVoice();
+    if (!greekVoice && synth.getVoices().length) {
+      toast('This device has no Greek voice yet. Add one in Settings → Accessibility → Spoken Content → Voices → Greek.', 6000);
+      return;
+    }
+    const clean = String(text).replace(/\([^)]*\)/g, '').replace(/\s*\/\s*/g, ', ').replace(/[…]|\.\.\./g, '').replace(/\s+/g, ' ').trim();
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(clean);
+    u.lang = 'el-GR';
+    if (greekVoice) u.voice = greekVoice;
+    u.rate = 0.85;
+    synth.speak(u);
+  }
+  const speakButton = (id, label) => synth ? `<button class="speak" type="button" id="${id}" aria-label="${esc(label)}">${SPEAKER}</button>` : '';
 
   /* ---------- Learning status ---------- */
   // A word starts as new. Its first review moves it to absorbing. SOLID_AFTER "knew it"
@@ -194,14 +282,33 @@
   const SOLID_AFTER = 3;
   const STATUS = { new: 'New', learning: 'Absorbing', solid: 'Solid' };
   const statusOf = w => w.s || 'new';
+  // Solid words come back for review after 3, then 7, 21 and 60 days.
+  const DAY = 864e5;
+  const INTERVALS = [3, 7, 21, 60];
+  const isDue = w => statusOf(w) === 'solid' && (!w.d || w.d <= Date.now());
   function review(w, knew) {
-    if (knew) { w.k = (w.k || 0) + 1; w.s = w.k >= SOLID_AFTER ? 'solid' : 'learning'; }
-    else { w.k = 0; w.s = 'learning'; }
+    if (!knew) { w.k = 0; w.s = 'learning'; delete w.l; delete w.d; return; }
+    if (w.s === 'solid') {
+      w.l = Math.min((w.l || 1) + 1, INTERVALS.length);
+      w.d = Date.now() + INTERVALS[w.l - 1] * DAY;
+      return;
+    }
+    w.k = (w.k || 0) + 1;
+    if (w.k >= SOLID_AFTER) { w.s = 'solid'; w.l = 1; w.d = Date.now() + INTERVALS[0] * DAY; }
+    else w.s = 'learning';
+  }
+  // A right answer in a multiple-choice test can be a lucky guess, so it moves a word
+  // forward but never all the way to Solid. A wrong answer counts in full.
+  function testReview(w, ok) {
+    if (!ok) return review(w, false);
+    if (statusOf(w) === 'solid') { if (isDue(w)) review(w, true); return; }
+    w.k = Math.min((w.k || 0) + 1, SOLID_AFTER - 1);
+    w.s = 'learning';
   }
   function setStatus(w, s) {
-    if (s === 'new') { delete w.s; delete w.k; }
-    else if (s === 'solid') { w.s = 'solid'; w.k = Math.max(w.k || 0, SOLID_AFTER); }
-    else { w.s = 'learning'; w.k = Math.min(w.k || 0, SOLID_AFTER - 1); }
+    if (s === 'new') { delete w.s; delete w.k; delete w.l; delete w.d; }
+    else if (s === 'solid') { w.s = 'solid'; w.k = Math.max(w.k || 0, SOLID_AFTER); w.l = 1; w.d = Date.now() + INTERVALS[0] * DAY; }
+    else { w.s = 'learning'; w.k = Math.min(w.k || 0, SOLID_AFTER - 1); delete w.l; delete w.d; }
   }
 
   /* ---------- Card deck ---------- */
@@ -217,8 +324,12 @@
   function buildDeck() {
     const inPile = w => pile === 'all' || statusOf(w) === pile;
     const ws = state.words.filter(w => inStudyCat(w) && inPile(w));
-    // In "All", words still being learned come before solid ones.
-    deck = [...shuffle(ws.filter(w => statusOf(w) !== 'solid').map(w => w.id)), ...shuffle(ws.filter(w => statusOf(w) === 'solid').map(w => w.id))];
+    // In "All": words still being learned, then solid words that are due for review.
+    // Choosing "Solid" shows every solid word, due ones first.
+    const learning = ws.filter(w => statusOf(w) !== 'solid');
+    const due = ws.filter(isDue);
+    const later = pile === 'solid' ? ws.filter(w => statusOf(w) === 'solid' && !isDue(w)) : [];
+    deck = [...shuffle(learning.map(w => w.id)), ...shuffle(due.map(w => w.id)), ...shuffle(later.map(w => w.id))];
     pos = 0;
   }
   buildDeck();
@@ -246,6 +357,7 @@
         </div>
         <div class="scene" id="scene">
           <button class="card" id="card" type="button"></button>
+          ${speakButton('card-speak', 'Hear it in Greek')}
           <div class="verdict verdict-yes" aria-hidden="true">Knew it</div>
           <div class="verdict verdict-no" aria-hidden="true">Didn’t know</div>
         </div>
@@ -263,6 +375,7 @@
       renderCards();
     }));
     $('#study-cat').addEventListener('change', e => { studyCategory(e.target.value); renderCards(); });
+    $('#card-speak')?.addEventListener('click', () => { const w = currentWord(); if (w) speakGreek(w.g); });
     $('#ans-no').addEventListener('click', () => answer(false));
     $('#ans-yes').addEventListener('click', () => answer(true));
 
@@ -299,6 +412,7 @@
     card.addEventListener('click', () => {
       if (dragged) { dragged = false; return; }
       card.classList.toggle('flipped');
+      scene.classList.toggle('is-flipped', card.classList.contains('flipped'));
       labelCard();
     });
   }
@@ -314,7 +428,10 @@
     const w = currentWord();
     ['#ans-no', '#ans-yes'].forEach(id => { const b = $(id); if (b) b.disabled = !w; });
     if (!w) {
-      const msg = pile === 'all' ? 'No words here yet' : `No ${STATUS[pile].toLowerCase()} words here`;
+      const anyHere = state.words.some(inStudyCat);
+      const msg = !anyHere ? 'No words here yet'
+        : pile === 'all' ? 'All caught up. Solid words come back when they’re due.'
+        : `No ${STATUS[pile].toLowerCase()} words here`;
       card.innerHTML = `<div class="face front"><div class="word" style="--fs:7">${msg}</div></div>`;
       return;
     }
@@ -326,7 +443,7 @@
       <div class="face front">
         <div class="word" lang="el" style="--fs:${fitSize(w.g)}">${esc(w.g)}</div>
         ${w.p ? `<div class="ipa">${esc(w.p)}</div>` : ''}
-        <div class="tag status-${st}">${STATUS[st]}${dots}</div>
+        <div class="tag status-${st}">${STATUS[st]}${st === 'solid' && isDue(w) ? ' · review' : ''}${dots}</div>
       </div>
       <div class="face back">
         <div class="word" style="--fs:${fitSize(w.e)}">${esc(w.e)}</div>
@@ -347,9 +464,12 @@
     if (!scene || !w || answering) return;
     answering = true;
     const before = statusOf(w);
+    const snapshot = { id: w.id, pos, fields: { s: w.s, k: w.k, l: w.l, d: w.d } };
     review(w, knew);
     const after = statusOf(w);
-    save(after === 'solid' && before !== 'solid' ? `${w.g} is solid now` : null);
+    save(null);
+    toast(after === 'solid' && before !== 'solid' ? `${w.g} is solid now` : (knew ? 'Knew it' : 'Didn’t know'), 4000,
+      { label: 'Undo', fn: () => undoAnswer(snapshot) });
     scene.classList.add(knew ? 'fly-right' : 'fly-left');
     setTimeout(() => {
       pos += 1;
@@ -359,13 +479,27 @@
       scene.style.translate = ''; scene.style.rotate = '';
       scene.querySelectorAll('.verdict').forEach(v => { v.style.opacity = ''; });
       card.classList.remove('flipped');
+      scene.classList.remove('is-flipped');
       paintCard();
-      $('#main').querySelectorAll('[data-pile] span').forEach(sp => { sp.textContent = pileCount(sp.parentElement.dataset.pile); });
+      refreshPiles();
       scene.classList.add('enter');
       void scene.offsetWidth;
       scene.classList.remove('no-anim', 'enter');
       answering = false;
     }, 260);
+  }
+
+  function undoAnswer(snap) {
+    const w = state.words.find(x => x.id === snap.id);
+    if (!w) return;
+    for (const [f, v] of Object.entries(snap.fields)) { if (v === undefined) delete w[f]; else w[f] = v; }
+    save(null);
+    if (deck[snap.pos] === w.id) pos = snap.pos;
+    else { deck = deck.filter(id => id !== w.id); pos = Math.min(pos, deck.length); deck.splice(pos, 0, w.id); }
+    if (currentView === 'cards') { $('#card')?.classList.remove('flipped'); $('#scene')?.classList.remove('is-flipped'); paintCard(); refreshPiles(); }
+  }
+  function refreshPiles() {
+    $('#main').querySelectorAll('[data-pile] span').forEach(sp => { sp.textContent = pileCount(sp.parentElement.dataset.pile); });
   }
 
   /* ---------- Edit toggle ---------- */
@@ -395,10 +529,21 @@
             </button></li>`).join('')}
           ${editing ? `<li><button class="cat-row add-row" type="button" id="new-cat"><span class="cat-name">+ New category</span></button></li>` : ''}
         </ul>
-        <button class="btn-text download" type="button" id="download">Download word list (words.js)</button>
+        <div class="backup">
+          <h3 class="section-title">Backup</h3>
+          <p class="page-note tight">Your words and progress are saved on this device only. Download a backup now and then. You can restore it here, or on another device.</p>
+          <div class="cat-actions">
+            <button class="btn-outline" type="button" id="download">Download backup</button>
+            <button class="btn-outline" type="button" id="restore">Restore from backup</button>
+            <input type="file" id="restore-file" accept=".js,.json,text/javascript,application/json" hidden>
+          </div>
+          <div id="restore-confirm"></div>
+        </div>
       </section>`;
     wireEditToggle();
-    $('#download').addEventListener('click', downloadWords);
+    $('#download').addEventListener('click', downloadBackup);
+    $('#restore').addEventListener('click', () => $('#restore-file').click());
+    $('#restore-file').addEventListener('change', e => { const f = e.target.files[0]; if (f) readBackup(f); });
     $('#main').querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => {
       if (editing) openCategorySheet(b.dataset.cat); else go(b.dataset.cat);
     }));
@@ -416,18 +561,18 @@
           <h2 class="page-title">${esc(c.name)}</h2>
           ${ws.length ? editButton('words') : ''}
         </div>
-        <p class="page-note">${editing ? 'Tap a word to edit it' : plural(ws.length)}</p>
+        <p class="page-note">${editing ? 'Tap a word to edit it' : plural(ws.length) + (synth ? ' · tap a word to hear it' : '')}</p>
         ${ws.length && !editing ? `<div class="cat-actions">
           <button class="btn-save" type="button" id="study-this">Study this category</button>
           <button class="btn-outline" type="button" id="test-this">Test this category</button>
         </div>` : ''}
         ${ws.length ? `<ul class="rows">
           ${ws.map(w => `
-            <li>${editing ? `<button class="word-row" type="button" data-word="${w.id}" aria-label="Edit ${esc(w.g)}">` : '<div class="word-row">'}
+            <li>${editing ? `<button class="word-row" type="button" data-word="${w.id}" aria-label="Edit ${esc(w.g)}">` : `<button class="word-row listen" type="button" data-say="${w.id}" aria-label="Hear ${esc(w.g)}">`}
               <span class="wr-greek" lang="el">${esc(w.g)}</span>
               <span class="wr-english">${esc(w.e)}${editing ? CHEVRON : ''}</span>
               ${w.p || statusOf(w) !== 'new' ? `<span class="wr-ipa">${esc(w.p)}${statusOf(w) !== 'new' ? ` <span class="wr-status status-${statusOf(w)}">${STATUS[statusOf(w)]}</span>` : ''}</span>` : ''}
-            ${editing ? '</button>' : '</div>'}</li>`).join('')}
+            </button></li>`).join('')}
         </ul>` : `<p class="empty">No words in this category yet.</p>`}
       </section>`;
     $('#to-cats').addEventListener('click', () => go('categories'));
@@ -435,6 +580,7 @@
     $('#test-this')?.addEventListener('click', () => { testCfg.cat = id; testRun = null; go('test'); });
     if (ws.length) wireEditToggle();
     $('#main').querySelectorAll('[data-word]').forEach(b => b.addEventListener('click', () => openWordSheet(b.dataset.word)));
+    $('#main').querySelectorAll('[data-say]').forEach(b => b.addEventListener('click', () => { const w = state.words.find(x => x.id === b.dataset.say); if (w) speakGreek(w.g); }));
   }
 
   /* ---------- Test ---------- */
@@ -442,7 +588,8 @@
   // so tests move words between New, Absorbing and Solid just like the cards do.
   const DIRS = [['ge', 'Greek → English'], ['eg', 'English → Greek'], ['mix', 'Mixed']];
   const LENGTHS = [['10', '10'], ['20', '20'], ['all', 'All']];
-  let testCfg = { cat: 'all', pile: 'all', dir: 'ge', len: '10' };
+  const MODES = [['choice', 'Choose from four'], ['flip', 'Flip and check']];
+  let testCfg = { cat: 'all', pile: 'all', dir: 'ge', len: '10', mode: 'choice' };
   try { Object.assign(testCfg, JSON.parse(localStorage.getItem('lexeis-test')) || {}); } catch {}
   if (testCfg.cat !== 'all' && !catById(testCfg.cat)) testCfg.cat = 'all';
   let testRun = null; // { qs: [...], i, score, done }
@@ -480,6 +627,13 @@
             ${chips('tdir', DIRS, testCfg.dir)}
           </div>
           <div class="setup-group">
+            <span class="setup-label">Answer by</span>
+            ${chips('tmode', MODES, testCfg.mode)}
+            <span class="setup-hint">${testCfg.mode === 'flip'
+              ? 'Say the answer to yourself, flip, then mark whether you got it. This counts fully, like the cards.'
+              : 'A right answer moves a word forward but can’t make it Solid, since it might be a lucky guess.'}</span>
+          </div>
+          <div class="setup-group">
             <span class="setup-label">Questions</span>
             ${chips('tlen', LENGTHS, testCfg.len)}
           </div>
@@ -494,6 +648,7 @@
     $('#main').querySelectorAll('[data-tpile]').forEach(b => b.addEventListener('click', () => { testCfg.pile = b.dataset.tpile; keep(); }));
     $('#main').querySelectorAll('[data-tdir]').forEach(b => b.addEventListener('click', () => { testCfg.dir = b.dataset.tdir; keep(); }));
     $('#main').querySelectorAll('[data-tlen]').forEach(b => b.addEventListener('click', () => { testCfg.len = b.dataset.tlen; keep(); }));
+    $('#main').querySelectorAll('[data-tmode]').forEach(b => b.addEventListener('click', () => { testCfg.mode = b.dataset.tmode; keep(); }));
     $('#t-start').addEventListener('click', () => startTest(shuffle(pool.slice()).slice(0, n)));
   }
 
@@ -501,6 +656,7 @@
     const dir = testCfg.dir === 'mix' ? (Math.random() < .5 ? 'ge' : 'eg') : testCfg.dir;
     const ans = x => dir === 'ge' ? x.e : x.g;
     const right = ans(w);
+    if (testCfg.mode === 'flip') return { id: w.id, dir, mode: 'flip', options: [right], right: 0, chosen: null, revealed: false };
     const seen = new Set([right.toLowerCase()]);
     const options = [right];
     // Wrong answers come from the same category first, then from everything else.
@@ -512,7 +668,7 @@
       if (!seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); options.push(t); }
     }
     shuffle(options);
-    return { id: w.id, dir, options, right: options.indexOf(right), chosen: null };
+    return { id: w.id, dir, mode: 'choice', options, right: options.indexOf(right), chosen: null };
   }
 
   function startTest(words) {
@@ -539,22 +695,32 @@
           <div class="prompt-word"${promptGreek ? ' lang="el"' : ''} style="--fs:${fitSize(promptText)}">${esc(promptText)}</div>
           ${promptGreek && w.p ? `<div class="ipa">${esc(w.p)}</div>` : ''}
           ${!promptGreek && answered && w.p ? `<div class="ipa">${esc(w.p)}</div>` : ''}
+          ${promptGreek || answered ? speakButton('q-speak', 'Hear it in Greek') : ''}
           <div class="prompt-ask">${promptGreek ? 'What does it mean?' : 'How do you say it in Greek?'}</div>
+          ${q.mode === 'flip' && q.revealed ? `<div class="reveal"${promptGreek ? '' : ' lang="el"'}>${esc(q.options[0])}${!promptGreek && w.p ? `<span class="ipa">${esc(w.p)}</span>` : ''}</div>` : ''}
         </div>
-        <div class="opts">
+        ${q.mode === 'flip' ? `<div class="flip-actions">
+          ${!q.revealed ? '<button class="btn-save" type="button" id="t-reveal">Show answer</button>'
+            : !answered ? `<button class="answer no-btn" type="button" id="t-miss">← I missed it</button>
+                           <button class="answer" type="button" id="t-got">I got it →</button>` : ''}
+        </div>` : `<div class="opts">
           ${q.options.map((o, i) => {
             const cls = !answered ? '' : i === q.right ? ' right' : i === q.chosen ? ' wrong' : ' dim';
             return `<button class="opt${cls}" type="button" data-opt="${i}"${promptGreek ? '' : ' lang="el"'}${answered ? ' disabled' : ''}>${esc(o)}</button>`;
           }).join('')}
-        </div>
+        </div>`}
         <div class="test-next">
-          ${answered ? `<span class="status">${q.chosen === q.right ? 'Right' : 'Not quite. The answer is highlighted.'}</span>
+          ${answered ? `<span class="status">${q.chosen === q.right ? 'Right' : q.mode === 'flip' ? 'Marked as missed' : 'Not quite. The answer is highlighted.'}</span>
           <button class="btn-save" type="button" id="t-next">${testRun.i + 1 < total ? 'Next' : 'See results'}</button>` : ''}
         </div>
       </section>`;
     $('#t-end').addEventListener('click', () => { testRun.done = true; renderTest(); });
     $('#main').querySelectorAll('[data-opt]').forEach(b => b.addEventListener('click', () => choose(+b.dataset.opt)));
     $('#t-next')?.addEventListener('click', nextQuestion);
+    $('#q-speak')?.addEventListener('click', () => speakGreek(w.g));
+    $('#t-reveal')?.addEventListener('click', () => { q.revealed = true; renderQuestion(); });
+    $('#t-got')?.addEventListener('click', () => choose(0));
+    $('#t-miss')?.addEventListener('click', () => choose(-1));
   }
 
   let advanceTimer;
@@ -565,7 +731,7 @@
     const ok = i === q.right;
     if (ok) testRun.score++;
     const w = state.words.find(x => x.id === q.id);
-    if (w) { review(w, ok); save(null); }
+    if (w) { if (q.mode === 'flip') review(w, ok); else testReview(w, ok); save(null); }
     renderQuestion();
     clearTimeout(advanceTimer);
     if (ok) advanceTimer = setTimeout(() => { if (currentView === 'test' && testRun && testRun.qs[testRun.i] === q) nextQuestion(); }, 900);
@@ -646,6 +812,7 @@
     del?.addEventListener('click', () => {
       if (!del.dataset.armed) { del.dataset.armed = '1'; del.textContent = 'Tap again to delete'; return; }
       state.cats = state.cats.filter(x => x.id !== id);
+      state.deletedCats.push(id);
       closeSheet(); route(); save('Category deleted');
     });
     form.addEventListener('submit', e => {
@@ -655,7 +822,7 @@
       const clash = catByName(name);
       if (clash && clash.id !== id) return showError(form, `There's already a category called “${clash.name}”.`);
       if (c) c.name = name;
-      else state.cats.push({ id: nextId(state.cats, 'c'), name });
+      else state.cats.push({ id: newId('c'), name });
       closeSheet(); route(); save(c ? 'Category renamed' : 'Category created');
     });
   }
@@ -697,6 +864,7 @@
     del.addEventListener('click', () => {
       if (!del.dataset.armed) { del.dataset.armed = '1'; del.textContent = 'Tap again to delete'; return; }
       state.words = state.words.filter(x => x.id !== wid);
+      state.deleted.push(wid);
       closeSheet(); route(); save('Word deleted');
     });
     form.addEventListener('submit', e => {
@@ -836,7 +1004,7 @@
       }
     }
     const cat = catId ? catById(catId) : ensureCategory(catName);
-    const w = { id: nextId(state.words, 'w'), g, p: ipa, e, c: cat.id };
+    const w = { id: newId('w'), g, p: ipa, e, c: cat.id };
     state.words.push(w);
     deck.push(w.id);
     addDraft = { g: '', e: '', p: '', pTouched: false, cat: d.cat === 'new' ? cat.id : d.cat, newCat: '' };
@@ -846,7 +1014,7 @@
   }
   function ensureCategory(name) {
     let c = catByName(name);
-    if (!c) { c = { id: nextId(state.cats, 'c'), name: name.trim() }; state.cats.push(c); }
+    if (!c) { c = { id: newId('c'), name: name.trim() }; state.cats.push(c); }
     return c;
   }
 
@@ -914,7 +1082,7 @@
       const add = items.filter(it => it.on);
       add.forEach(it => {
         const cat = ensureCategory(it.c || 'Imported');
-        const w = { id: nextId(state.words, 'w'), g: it.g, p: it.p, e: it.e, c: cat.id };
+        const w = { id: newId('w'), g: it.g, p: it.p, e: it.e, c: cat.id };
         state.words.push(w);
         deck.push(w.id);
       });
@@ -1068,10 +1236,16 @@
 
   /* ---------- Saving: kept in this browser; download a copy to update the repo ---------- */
   let toastTimer;
-  function toast(msg, ms = 2200) {
+  function toast(msg, ms = 2200, action = null) {
     let t = $('.toast');
     if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
     t.textContent = msg;
+    if (action) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'toast-action'; b.textContent = action.label;
+      b.addEventListener('click', () => { t.remove(); clearTimeout(toastTimer); action.fn(); });
+      t.appendChild(b);
+    }
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.remove(), ms);
   }
@@ -1079,14 +1253,51 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); if (doneMsg) toast(doneMsg); }
     catch { toast('Couldn’t save in this browser. Private browsing can block saving.', 4000); }
   }
-  function downloadWords() {
-    const body = '// Word list for Λέξεις. Replace this file in the repo to update the starting words.\nwindow.LEXEIS_DATA = ' + JSON.stringify(state, null, 1) + ';\n';
-    const url = URL.createObjectURL(new Blob([body], { type: 'text/javascript' }));
+  // The backup is a words.js file: it restores here, and it can also replace data/words.js in the repo.
+  async function downloadBackup() {
+    const body = '// Λέξεις backup: your words, categories and progress.\nwindow.LEXEIS_DATA = ' + JSON.stringify(state, null, 1) + ';\n';
+    const name = `lexeis-backup-${new Date().toISOString().slice(0, 10)}.js`;
+    const file = new File([body], name, { type: 'text/javascript' });
+    // On iPad and iPhone the share sheet is the dependable way to save a file ("Save to Files").
+    if (navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Λέξεις backup' }); return; }
+      catch (e) { if (e?.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(file);
     const a = document.createElement('a');
-    a.href = url; a.download = 'words.js';
+    a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  async function readBackup(file) {
+    const box = $('#restore-confirm');
+    let data = null;
+    try {
+      const text = await file.text();
+      try { data = JSON.parse(text); }
+      catch { data = JSON.parse(text.slice(text.indexOf('=') + 1, text.lastIndexOf(';'))); }
+    } catch {}
+    if (!data || !Array.isArray(data.words) || !Array.isArray(data.cats)) {
+      box.innerHTML = `<p class="error">“${esc(file.name)}” isn’t a Λέξεις backup. Pick a file made with Download backup.</p>`;
+      return;
+    }
+    const learned = data.words.filter(w => w.s).length;
+    box.innerHTML = `
+      <p class="page-note tight">This replaces the ${plural(state.words.length)} on this device with the backup’s ${plural(data.words.length)} (${learned} with progress).</p>
+      <div class="cat-actions">
+        <button class="btn-save" type="button" id="restore-yes">Replace with backup</button>
+        <button class="btn-text" type="button" id="restore-no">Cancel</button>
+      </div>`;
+    $('#restore-no').addEventListener('click', () => { box.innerHTML = ''; $('#restore-file').value = ''; });
+    $('#restore-yes').addEventListener('click', () => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        location.reload();
+      } catch { box.innerHTML = '<p class="error">Couldn’t save the backup on this device. Free some space and try again.</p>'; }
+    });
+  }
+  // Ask the browser not to clear the app's storage when the device is low on space.
+  try { navigator.storage?.persist?.(); } catch {}
 
   /* ---------- Start ---------- */
   route();

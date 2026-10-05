@@ -1,5 +1,7 @@
 // Word list for Λέξεις. Replace this file in the repo to update the starting words.
+// "changes" lets the app apply list updates to words already saved on a device.
 window.LEXEIS_DATA = {
+ "rev": 2,
  "cats": [
   {
    "id": "c1",
@@ -42,6 +44,16 @@ window.LEXEIS_DATA = {
    "name": "Nature & weather"
   },
   {
+   "id": "c20",
+   "name": "Free time",
+   "since": 2
+  },
+  {
+   "id": "c21",
+   "name": "Countries & places",
+   "since": 2
+  },
+  {
    "id": "c11",
    "name": "Adjectives"
   },
@@ -56,10 +68,6 @@ window.LEXEIS_DATA = {
   {
    "id": "c14",
    "name": "Phrases"
-  },
-  {
-   "id": "c15",
-   "name": "Nouns"
   },
   {
    "id": "c16",
@@ -313,7 +321,8 @@ window.LEXEIS_DATA = {
    "g": "μιλάω / μιλώ",
    "p": "[miˈlao] / [miˈlo]",
    "e": "to speak, to talk",
-   "c": "c1"
+   "c": "c1",
+   "n": "μιλάς, μιλάει, μιλάμε, μιλάτε, μιλάνε"
   },
   {
    "id": "w34",
@@ -1901,7 +1910,8 @@ window.LEXEIS_DATA = {
    "g": "φτηνός (-ή, -ό)",
    "p": "[ftiˈnos]",
    "e": "cheap",
-   "c": "c11"
+   "c": "c11",
+   "n": "Also spelled φθηνός [fθiˈnos]"
   },
   {
    "id": "w257",
@@ -2100,13 +2110,6 @@ window.LEXEIS_DATA = {
    "c": "c12"
   },
   {
-   "id": "w285",
-   "g": "Κοντά / Μακριά",
-   "p": "[konˈda] / [makriˈa]",
-   "e": "Near / Close by vs Far / Far away",
-   "c": "c12"
-  },
-  {
    "id": "w286",
    "g": "Αριστερά",
    "p": "[aristeˈra]",
@@ -2185,9 +2188,9 @@ window.LEXEIS_DATA = {
   },
   {
    "id": "w297",
-   "g": "Πάνω / Κάτω",
-   "p": "[ˈpano] / [ˈkato]",
-   "e": "Up (above) / Down (below)",
+   "g": "Κάτω",
+   "p": "[ˈkato]",
+   "e": "Down / Below",
    "c": "c13"
   },
   {
@@ -2195,13 +2198,6 @@ window.LEXEIS_DATA = {
    "g": "Στη γωνία",
    "p": "[sti ɣoˈnia]",
    "e": "At the corner",
-   "c": "c13"
-  },
-  {
-   "id": "w299",
-   "g": "Εδώ / Εκεί",
-   "p": "[eˈðo] / [eˈki]",
-   "e": "Here / There",
    "c": "c13"
   },
   {
@@ -2458,14 +2454,14 @@ window.LEXEIS_DATA = {
    "g": "το καλοκαίρι",
    "p": "[kaloˈkeri]",
    "e": "summer",
-   "c": "c15"
+   "c": "c7"
   },
   {
    "id": "w334",
    "g": "η ζέστη",
    "p": "[ˈzesti]",
    "e": "heat; hot weather",
-   "c": "c15",
+   "c": "c10",
    "n": "κάνει ζέστη = it's hot"
   },
   {
@@ -2473,7 +2469,7 @@ window.LEXEIS_DATA = {
    "g": "το κρύο",
    "p": "[ˈkrio]",
    "e": "cold",
-   "c": "c15",
+   "c": "c10",
    "n": "κάνει κρύο = it's cold"
   },
   {
@@ -2481,28 +2477,28 @@ window.LEXEIS_DATA = {
    "g": "ο καθηγητής / η καθηγήτρια",
    "p": "[kaθijiˈtis] / [kaθiˈjitria]",
    "e": "teacher (secondary school); professor",
-   "c": "c15"
+   "c": "c6"
   },
   {
    "id": "w337",
    "g": "η κιθάρα",
    "p": "[kiˈθara]",
    "e": "guitar",
-   "c": "c15"
+   "c": "c20"
   },
   {
    "id": "w338",
    "g": "η μουσική",
    "p": "[musiˈki]",
    "e": "music",
-   "c": "c15"
+   "c": "c20"
   },
   {
    "id": "w339",
    "g": "το σκυλί",
    "p": "[skiˈli]",
    "e": "dog",
-   "c": "c15",
+   "c": "c10",
    "n": "Also ο σκύλος [ˈskilos]. The last sentence of WS1 T2 is cut off; it looks like 'He has a dog'"
   },
   {
@@ -2510,7 +2506,7 @@ window.LEXEIS_DATA = {
    "g": "η τυρόπιτα",
    "p": "[tiˈropita]",
    "e": "cheese pie",
-   "c": "c15",
+   "c": "c3",
    "n": "τυρί (cheese) + πίτα (pie)"
   },
   {
@@ -2518,7 +2514,7 @@ window.LEXEIS_DATA = {
    "g": "το μπουκάλι",
    "p": "[buˈkali]",
    "e": "bottle",
-   "c": "c15",
+   "c": "c3",
    "n": "ένα μπουκάλι νερό = a bottle of water (no word for 'of')"
   },
   {
@@ -2526,7 +2522,7 @@ window.LEXEIS_DATA = {
    "g": "τα ελληνικά",
    "p": "[eliniˈka]",
    "e": "Greek (language)",
-   "c": "c15",
+   "c": "c6",
    "n": "Languages are lowercase and plural"
   },
   {
@@ -2534,28 +2530,28 @@ window.LEXEIS_DATA = {
    "g": "τα αγγλικά",
    "p": "[aŋgliˈka]",
    "e": "English (language)",
-   "c": "c15"
+   "c": "c6"
   },
   {
    "id": "w344",
    "g": "το πάρκο",
    "p": "[ˈparko]",
    "e": "park",
-   "c": "c15"
+   "c": "c5"
   },
   {
    "id": "w345",
    "g": "η Ελλάδα",
    "p": "[eˈlaða]",
    "e": "Greece",
-   "c": "c15"
+   "c": "c21"
   },
   {
    "id": "w346",
    "g": "η Αθήνα",
    "p": "[aˈθina]",
    "e": "Athens",
-   "c": "c15",
+   "c": "c21",
    "n": "στην Αθήνα = in Athens"
   },
   {
@@ -2563,14 +2559,14 @@ window.LEXEIS_DATA = {
    "g": "η Ιταλία",
    "p": "[itaˈlia]",
    "e": "Italy",
-   "c": "c15"
+   "c": "c21"
   },
   {
    "id": "w348",
    "g": "η Ισπανία",
    "p": "[ispaˈnia]",
    "e": "Spain",
-   "c": "c15"
+   "c": "c21"
   },
   {
    "id": "w349",
@@ -2579,14 +2575,6 @@ window.LEXEIS_DATA = {
    "e": "to be called (named)",
    "c": "c1",
    "n": "λέγεσαι = you're called · λέγεται = he/she is called"
-  },
-  {
-   "id": "w350",
-   "g": "μιλάω",
-   "p": "[miˈlao]",
-   "e": "to speak",
-   "c": "c1",
-   "n": "μιλάς, μιλάει, μιλάμε, μιλάτε, μιλάνε"
   },
   {
    "id": "w351",
@@ -2608,14 +2596,6 @@ window.LEXEIS_DATA = {
    "p": "[iˈparçi] / [iˈparxun]",
    "e": "there is / there are",
    "c": "c1"
-  },
-  {
-   "id": "w354",
-   "g": "φθηνός, -ή, -ό",
-   "p": "[fθiˈnos]",
-   "e": "cheap",
-   "c": "c11",
-   "n": "Also spelled φτηνός [ftiˈnos]"
   },
   {
    "id": "w355",
@@ -2707,21 +2687,21 @@ window.LEXEIS_DATA = {
    "g": "εδώ",
    "p": "[eˈðo]",
    "e": "here",
-   "c": "c16"
+   "c": "c13"
   },
   {
    "id": "w367",
    "g": "εκεί",
    "p": "[eˈki]",
    "e": "there",
-   "c": "c16"
+   "c": "c13"
   },
   {
    "id": "w368",
    "g": "μακριά",
    "p": "[makriˈa]",
    "e": "far (away)",
-   "c": "c16",
+   "c": "c13",
    "n": "μακριά από = far from"
   },
   {
@@ -2729,7 +2709,7 @@ window.LEXEIS_DATA = {
    "g": "πάνω",
    "p": "[ˈpano]",
    "e": "on (top); up",
-   "c": "c16",
+   "c": "c13",
    "n": "πάνω στο τραπέζι = on the table"
   },
   {
@@ -3944,6 +3924,173 @@ window.LEXEIS_DATA = {
    "p": "[muˈsio]",
    "e": "museum",
    "c": "c5"
+  }
+ ],
+ "changes": [
+  {
+   "rev": 2,
+   "note": "Merged duplicates; nouns moved into topic categories",
+   "removeWords": [
+    "w350",
+    "w354",
+    "w285",
+    "w299"
+   ],
+   "removeCats": [
+    "c15"
+   ],
+   "set": [
+    [
+     "w33",
+     "n",
+     null,
+     "μιλάς, μιλάει, μιλάμε, μιλάτε, μιλάνε"
+    ],
+    [
+     "w256",
+     "n",
+     null,
+     "Also spelled φθηνός [fθiˈnos]"
+    ],
+    [
+     "w297",
+     "g",
+     "Πάνω / Κάτω",
+     "Κάτω"
+    ],
+    [
+     "w297",
+     "e",
+     "Up (above) / Down (below)",
+     "Down / Below"
+    ],
+    [
+     "w297",
+     "p",
+     "[ˈpano] / [ˈkato]",
+     "[ˈkato]"
+    ],
+    [
+     "w368",
+     "c",
+     "c16",
+     "c13"
+    ],
+    [
+     "w369",
+     "c",
+     "c16",
+     "c13"
+    ],
+    [
+     "w366",
+     "c",
+     "c16",
+     "c13"
+    ],
+    [
+     "w367",
+     "c",
+     "c16",
+     "c13"
+    ],
+    [
+     "w333",
+     "c",
+     "c15",
+     "c7"
+    ],
+    [
+     "w334",
+     "c",
+     "c15",
+     "c10"
+    ],
+    [
+     "w335",
+     "c",
+     "c15",
+     "c10"
+    ],
+    [
+     "w336",
+     "c",
+     "c15",
+     "c6"
+    ],
+    [
+     "w337",
+     "c",
+     "c15",
+     "c20"
+    ],
+    [
+     "w338",
+     "c",
+     "c15",
+     "c20"
+    ],
+    [
+     "w339",
+     "c",
+     "c15",
+     "c10"
+    ],
+    [
+     "w340",
+     "c",
+     "c15",
+     "c3"
+    ],
+    [
+     "w341",
+     "c",
+     "c15",
+     "c3"
+    ],
+    [
+     "w342",
+     "c",
+     "c15",
+     "c6"
+    ],
+    [
+     "w343",
+     "c",
+     "c15",
+     "c6"
+    ],
+    [
+     "w344",
+     "c",
+     "c15",
+     "c5"
+    ],
+    [
+     "w345",
+     "c",
+     "c15",
+     "c21"
+    ],
+    [
+     "w346",
+     "c",
+     "c15",
+     "c21"
+    ],
+    [
+     "w347",
+     "c",
+     "c15",
+     "c21"
+    ],
+    [
+     "w348",
+     "c",
+     "c15",
+     "c21"
+    ]
+   ]
   }
  ]
 };
