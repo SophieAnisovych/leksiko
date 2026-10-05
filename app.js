@@ -138,6 +138,7 @@
     </header>
     <div class="scrim" id="scrim"></div>
     <nav class="drawer" id="drawer" aria-label="Main menu" inert>
+      <button type="button" data-go="">Cards</button>
       <button type="button" data-go="categories">Categories</button>
       <button type="button" data-go="add">Add words</button>
       <button type="button">Test</button>
@@ -157,14 +158,14 @@
   $('#scrim').addEventListener('click', () => setMenu(false));
   drawer.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     setMenu(false);
-    if (b.dataset.go) go(b.dataset.go);
+    if ('go' in b.dataset) go(b.dataset.go);
   }));
   $('#home').addEventListener('click', () => { setMenu(false); go(''); });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeSheet(); setMenu(false); }
     if (currentView === 'cards' && !sheetOpen()) {
-      if (e.key === 'ArrowRight') step(1);
-      if (e.key === 'ArrowLeft') step(-1);
+      if (e.key === 'ArrowRight') answer(true);
+      if (e.key === 'ArrowLeft') answer(false);
     }
   });
 
@@ -185,38 +186,101 @@
   }
   window.addEventListener('hashchange', () => { editing = false; route(); });
 
+  /* ---------- Learning status ---------- */
+  // A word starts as new. Its first review moves it to absorbing. SOLID_AFTER "knew it"
+  // answers in a row make it solid; a "didn't know" resets the run (and a solid word
+  // goes back to absorbing).
+  const SOLID_AFTER = 3;
+  const STATUS = { new: 'New', learning: 'Absorbing', solid: 'Solid' };
+  const statusOf = w => w.s || 'new';
+  function review(w, knew) {
+    if (knew) { w.k = (w.k || 0) + 1; w.s = w.k >= SOLID_AFTER ? 'solid' : 'learning'; }
+    else { w.k = 0; w.s = 'learning'; }
+  }
+  function setStatus(w, s) {
+    if (s === 'new') { delete w.s; delete w.k; }
+    else if (s === 'solid') { w.s = 'solid'; w.k = Math.max(w.k || 0, SOLID_AFTER); }
+    else { w.s = 'learning'; w.k = Math.min(w.k || 0, SOLID_AFTER - 1); }
+  }
+
   /* ---------- Card deck ---------- */
+  const PILES = [['all', 'All'], ['new', 'New'], ['learning', 'Absorbing'], ['solid', 'Solid']];
+  let pile = 'all';
+  try { const p = localStorage.getItem('lexeis-pile'); if (PILES.some(([k]) => k === p)) pile = p; } catch {}
   let deck = [];
   let pos = 0;
+  const shuffle = ids => { for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; } return ids; };
   function buildDeck() {
-    const ids = state.words.map(w => w.id);
-    for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
-    const start = state.words.find(w => w.g.startsWith('Ευχαριστώ'));
-    if (start) { ids.splice(ids.indexOf(start.id), 1); ids.unshift(start.id); }
-    deck = ids;
+    const inPile = w => pile === 'all' || statusOf(w) === pile;
+    const ws = state.words.filter(inPile);
+    // In "All", words still being learned come before solid ones.
+    deck = [...shuffle(ws.filter(w => statusOf(w) !== 'solid').map(w => w.id)), ...shuffle(ws.filter(w => statusOf(w) === 'solid').map(w => w.id))];
+    pos = 0;
   }
   buildDeck();
   const fitSize = text => { const n = text.length; return n <= 10 ? 12.5 : n <= 15 ? 10 : n <= 22 ? 8 : n <= 34 ? 6.6 : 5.6; };
+  const pileCount = k => k === 'all' ? state.words.length : state.words.filter(w => statusOf(w) === k).length;
 
   function renderCards() {
     currentView = 'cards';
     $('#main').innerHTML = `
       <section class="view-cards">
+        <div class="piles" role="group" aria-label="Which words to study">
+          ${PILES.map(([k, label]) => `<button type="button" class="pile${k === pile ? ' on' : ''}" data-pile="${k}" aria-pressed="${k === pile}">${label} <span>${pileCount(k)}</span></button>`).join('')}
+        </div>
         <div class="scene" id="scene">
           <button class="card" id="card" type="button"></button>
+          <div class="verdict verdict-yes" aria-hidden="true">Knew it</div>
+          <div class="verdict verdict-no" aria-hidden="true">Didn’t know</div>
         </div>
-        <div class="hint">tap to flip · swipe for the next word</div>
+        <div class="answers">
+          <button class="answer" type="button" id="ans-no">← Didn’t know</button>
+          <span class="hint">tap the card to flip</span>
+          <button class="answer" type="button" id="ans-yes">Knew it →</button>
+        </div>
       </section>`;
     paintCard();
-    const card = $('#card');
-    let sx = 0, sy = 0, swiped = false;
-    card.addEventListener('pointerdown', e => { sx = e.clientX; sy = e.clientY; swiped = false; });
-    card.addEventListener('pointerup', e => {
-      const dx = e.clientX - sx, dy = e.clientY - sy;
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { swiped = true; step(dx < 0 ? 1 : -1); }
+    $('#main').querySelectorAll('[data-pile]').forEach(b => b.addEventListener('click', () => {
+      pile = b.dataset.pile;
+      try { localStorage.setItem('lexeis-pile', pile); } catch {}
+      buildDeck();
+      renderCards();
+    }));
+    $('#ans-no').addEventListener('click', () => answer(false));
+    $('#ans-yes').addEventListener('click', () => answer(true));
+
+    // Drag the card: right = knew it, left = didn't know.
+    const scene = $('#scene'), card = $('#card');
+    let sx = 0, sy = 0, dx = 0, down = false, dragged = false;
+    const yes = $('.verdict-yes', scene), no = $('.verdict-no', scene);
+    const showDrag = () => {
+      scene.style.translate = `${dx}px 0`;
+      scene.style.rotate = `${dx / 40}deg`;
+      yes.style.opacity = Math.max(0, Math.min(1, dx / 90));
+      no.style.opacity = Math.max(0, Math.min(1, -dx / 90));
+    };
+    card.addEventListener('pointerdown', e => {
+      if (!currentWord() || answering) return;
+      down = true; dragged = false; sx = e.clientX; sy = e.clientY; dx = 0;
+      scene.classList.add('dragging');
     });
+    card.addEventListener('pointermove', e => {
+      if (!down) return;
+      const mx = e.clientX - sx, my = e.clientY - sy;
+      if (!dragged && Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(my)) { dragged = true; try { card.setPointerCapture(e.pointerId); } catch {} }
+      if (dragged) { dx = mx; showDrag(); }
+    });
+    const release = () => {
+      if (!down) return;
+      down = false;
+      scene.classList.remove('dragging');
+      if (dragged && Math.abs(dx) > 90) answer(dx > 0);
+      else { dx = 0; showDrag(); }
+    };
+    card.addEventListener('pointerup', release);
+    card.addEventListener('pointercancel', release);
     card.addEventListener('click', () => {
-      if (swiped) { swiped = false; return; }
+      if (dragged) { dragged = false; return; }
       card.classList.toggle('flipped');
       labelCard();
     });
@@ -231,12 +295,21 @@
     const card = $('#card');
     if (!card) return;
     const w = currentWord();
-    if (!w) { card.innerHTML = '<div class="face front"><div class="word" style="--fs:7">No words yet</div></div>'; return; }
+    ['#ans-no', '#ans-yes'].forEach(id => { const b = $(id); if (b) b.disabled = !w; });
+    if (!w) {
+      const msg = pile === 'all' ? 'No words yet' : `No ${STATUS[pile].toLowerCase()} words`;
+      card.innerHTML = `<div class="face front"><div class="word" style="--fs:7">${msg}</div></div>`;
+      return;
+    }
+    const st = statusOf(w);
+    const dots = st === 'learning'
+      ? `<span class="dots" aria-label="${w.k || 0} of ${SOLID_AFTER}">${Array.from({ length: SOLID_AFTER }, (_, i) => `<i class="${i < (w.k || 0) ? 'on' : ''}"></i>`).join('')}</span>`
+      : '';
     card.innerHTML = `
       <div class="face front">
         <div class="word" lang="el" style="--fs:${fitSize(w.g)}">${esc(w.g)}</div>
         ${w.p ? `<div class="ipa">${esc(w.p)}</div>` : ''}
-        <div class="tag">Greek</div>
+        <div class="tag status-${st}">${STATUS[st]}${dots}</div>
       </div>
       <div class="face back">
         <div class="word" style="--fs:${fitSize(w.e)}">${esc(w.e)}</div>
@@ -249,24 +322,33 @@
     if (!card || !w) return;
     card.setAttribute('aria-label', card.classList.contains('flipped')
       ? `Flashcard: ${w.e}. Tap to show Greek.`
-      : `Flashcard: ${w.g}. Tap to show English.`);
+      : `Flashcard: ${w.g}, ${STATUS[statusOf(w)]}. Tap to show English.`);
   }
-  let stepping = false;
-  function step(dir) {
-    const card = $('#card');
-    if (!card || stepping) return;
-    stepping = true;
-    card.classList.add(dir > 0 ? 'out-left' : 'out-right');
+  let answering = false;
+  function answer(knew) {
+    const scene = $('#scene'), card = $('#card'), w = currentWord();
+    if (!scene || !w || answering) return;
+    answering = true;
+    const before = statusOf(w);
+    review(w, knew);
+    const after = statusOf(w);
+    save(after === 'solid' && before !== 'solid' ? `${w.g} is solid now` : null);
+    scene.classList.add(knew ? 'fly-right' : 'fly-left');
     setTimeout(() => {
-      pos += dir;
-      card.classList.add('no-anim');
-      card.classList.remove('flipped', 'out-left', 'out-right');
-      card.classList.add(dir > 0 ? 'out-right' : 'out-left');
+      pos += 1;
+      if (pos >= deck.length) buildDeck();
+      scene.classList.add('no-anim');
+      scene.classList.remove('fly-right', 'fly-left');
+      scene.style.translate = ''; scene.style.rotate = '';
+      scene.querySelectorAll('.verdict').forEach(v => { v.style.opacity = ''; });
+      card.classList.remove('flipped');
       paintCard();
-      void card.offsetWidth;
-      card.classList.remove('no-anim', 'out-left', 'out-right');
-      stepping = false;
-    }, 220);
+      $('#main').querySelectorAll('[data-pile] span').forEach(sp => { sp.textContent = pileCount(sp.parentElement.dataset.pile); });
+      scene.classList.add('enter');
+      void scene.offsetWidth;
+      scene.classList.remove('no-anim', 'enter');
+      answering = false;
+    }, 260);
   }
 
   /* ---------- Edit toggle ---------- */
@@ -323,7 +405,7 @@
             <li>${editing ? `<button class="word-row" type="button" data-word="${w.id}" aria-label="Edit ${esc(w.g)}">` : '<div class="word-row">'}
               <span class="wr-greek" lang="el">${esc(w.g)}</span>
               <span class="wr-english">${esc(w.e)}${editing ? CHEVRON : ''}</span>
-              ${w.p ? `<span class="wr-ipa">${esc(w.p)}</span>` : ''}
+              ${w.p || statusOf(w) !== 'new' ? `<span class="wr-ipa">${esc(w.p)}${statusOf(w) !== 'new' ? ` <span class="wr-status status-${statusOf(w)}">${STATUS[statusOf(w)]}</span>` : ''}</span>` : ''}
             ${editing ? '</button>' : '</div>'}</li>`).join('')}
         </ul>` : `<p class="empty">No words in this category yet.</p>`}
       </section>`;
@@ -406,6 +488,10 @@
         <label for="w-cat">Category</label>
         <select id="w-cat">${state.cats.map(c => `<option value="${c.id}"${c.id === w.c ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
       </div>
+      <div class="field">
+        <label for="w-status">Status</label>
+        <select id="w-status">${Object.entries(STATUS).map(([k, label]) => `<option value="${k}"${k === statusOf(w) ? ' selected' : ''}>${label}</option>`).join('')}</select>
+      </div>
       <p class="error" id="sheet-error" hidden></p>
       <div class="sheet-actions">
         <button class="btn-text danger" type="button" id="w-delete">Delete word</button>
@@ -428,6 +514,7 @@
       w.g = g; w.e = en;
       w.p = $('#w-ipa', form).value.trim();
       w.c = $('#w-cat', form).value;
+      if ($('#w-status', form).value !== statusOf(w)) setStatus(w, $('#w-status', form).value);
       closeSheet(); route(); save('Word saved');
     });
   }
@@ -796,7 +883,7 @@
     toastTimer = setTimeout(() => t.remove(), ms);
   }
   function save(doneMsg) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); toast(doneMsg); }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); if (doneMsg) toast(doneMsg); }
     catch { toast('Couldn’t save in this browser. Private browsing can block saving.', 4000); }
   }
   function downloadWords() {
