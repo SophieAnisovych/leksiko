@@ -141,7 +141,7 @@
       <button type="button" data-go="">Cards</button>
       <button type="button" data-go="categories">Categories</button>
       <button type="button" data-go="add">Add words</button>
-      <button type="button">Test</button>
+      <button type="button" data-go="test">Test</button>
     </nav>
     <main id="main"></main>`;
 
@@ -169,7 +169,7 @@
     }
   });
 
-  /* ---------- Routing (#categories, #c12, #add) ---------- */
+  /* ---------- Routing (#categories, #c12, #add, #test) ---------- */
   let currentView = '';
   let editing = false;
   function go(hash) {
@@ -181,6 +181,7 @@
     const h = location.hash.slice(1);
     if (h === 'categories') renderCategories();
     else if (h === 'add') renderAdd();
+    else if (h === 'test') renderTest();
     else if (/^c\d+$/.test(h) && catById(h)) renderCategory(h);
     else renderCards();
   }
@@ -207,24 +208,39 @@
   const PILES = [['all', 'All'], ['new', 'New'], ['learning', 'Absorbing'], ['solid', 'Solid']];
   let pile = 'all';
   try { const p = localStorage.getItem('lexeis-pile'); if (PILES.some(([k]) => k === p)) pile = p; } catch {}
+  let studyCat = 'all';
+  try { const c = localStorage.getItem('lexeis-cat'); if (c && catById(c)) studyCat = c; } catch {}
+  const inStudyCat = w => studyCat === 'all' || w.c === studyCat;
   let deck = [];
   let pos = 0;
   const shuffle = ids => { for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; } return ids; };
   function buildDeck() {
     const inPile = w => pile === 'all' || statusOf(w) === pile;
-    const ws = state.words.filter(inPile);
+    const ws = state.words.filter(w => inStudyCat(w) && inPile(w));
     // In "All", words still being learned come before solid ones.
     deck = [...shuffle(ws.filter(w => statusOf(w) !== 'solid').map(w => w.id)), ...shuffle(ws.filter(w => statusOf(w) === 'solid').map(w => w.id))];
     pos = 0;
   }
   buildDeck();
   const fitSize = text => { const n = text.length; return n <= 10 ? 12.5 : n <= 15 ? 10 : n <= 22 ? 8 : n <= 34 ? 6.6 : 5.6; };
-  const pileCount = k => k === 'all' ? state.words.length : state.words.filter(w => statusOf(w) === k).length;
+  const pileCount = k => state.words.filter(w => inStudyCat(w) && (k === 'all' || statusOf(w) === k)).length;
+  const catOptions = (selected, allLabel) =>
+    `<option value="all"${selected === 'all' ? ' selected' : ''}>${allLabel}</option>` +
+    state.cats.map(c => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${esc(c.name)} · ${wordsIn(c.id).length}</option>`).join('');
+  function studyCategory(id) {
+    studyCat = id;
+    try { localStorage.setItem('lexeis-cat', id); } catch {}
+    buildDeck();
+  }
 
   function renderCards() {
     currentView = 'cards';
     $('#main').innerHTML = `
       <section class="view-cards">
+        <div class="deck-bar">
+          <label class="visually-hidden" for="study-cat">Category</label>
+          <select class="deck-select" id="study-cat">${catOptions(studyCat, 'All categories')}</select>
+        </div>
         <div class="piles" role="group" aria-label="Which words to study">
           ${PILES.map(([k, label]) => `<button type="button" class="pile${k === pile ? ' on' : ''}" data-pile="${k}" aria-pressed="${k === pile}">${label} <span>${pileCount(k)}</span></button>`).join('')}
         </div>
@@ -246,6 +262,7 @@
       buildDeck();
       renderCards();
     }));
+    $('#study-cat').addEventListener('change', e => { studyCategory(e.target.value); renderCards(); });
     $('#ans-no').addEventListener('click', () => answer(false));
     $('#ans-yes').addEventListener('click', () => answer(true));
 
@@ -297,7 +314,7 @@
     const w = currentWord();
     ['#ans-no', '#ans-yes'].forEach(id => { const b = $(id); if (b) b.disabled = !w; });
     if (!w) {
-      const msg = pile === 'all' ? 'No words yet' : `No ${STATUS[pile].toLowerCase()} words`;
+      const msg = pile === 'all' ? 'No words here yet' : `No ${STATUS[pile].toLowerCase()} words here`;
       card.innerHTML = `<div class="face front"><div class="word" style="--fs:7">${msg}</div></div>`;
       return;
     }
@@ -400,6 +417,10 @@
           ${ws.length ? editButton('words') : ''}
         </div>
         <p class="page-note">${editing ? 'Tap a word to edit it' : plural(ws.length)}</p>
+        ${ws.length && !editing ? `<div class="cat-actions">
+          <button class="btn-save" type="button" id="study-this">Study these cards</button>
+          <button class="btn-outline" type="button" id="test-this">Test me</button>
+        </div>` : ''}
         ${ws.length ? `<ul class="rows">
           ${ws.map(w => `
             <li>${editing ? `<button class="word-row" type="button" data-word="${w.id}" aria-label="Edit ${esc(w.g)}">` : '<div class="word-row">'}
@@ -410,8 +431,180 @@
         </ul>` : `<p class="empty">No words in this category yet.</p>`}
       </section>`;
     $('#to-cats').addEventListener('click', () => go('categories'));
+    $('#study-this')?.addEventListener('click', () => { studyCategory(id); pile = 'all'; try { localStorage.setItem('lexeis-pile', pile); } catch {} buildDeck(); go(''); });
+    $('#test-this')?.addEventListener('click', () => { testCfg.cat = id; testRun = null; go('test'); });
     if (ws.length) wireEditToggle();
     $('#main').querySelectorAll('[data-word]').forEach(b => b.addEventListener('click', () => openWordSheet(b.dataset.word)));
+  }
+
+  /* ---------- Test ---------- */
+  // Multiple choice. A right answer counts as "knew it", a wrong one as "didn't know",
+  // so tests move words between New, Absorbing and Solid just like the cards do.
+  const DIRS = [['ge', 'Greek → English'], ['eg', 'English → Greek'], ['mix', 'Mixed']];
+  const LENGTHS = [['10', '10'], ['20', '20'], ['all', 'All']];
+  let testCfg = { cat: 'all', pile: 'all', dir: 'ge', len: '10' };
+  try { Object.assign(testCfg, JSON.parse(localStorage.getItem('lexeis-test')) || {}); } catch {}
+  if (testCfg.cat !== 'all' && !catById(testCfg.cat)) testCfg.cat = 'all';
+  let testRun = null; // { qs: [...], i, score, done }
+  const testPool = () => state.words.filter(w => (testCfg.cat === 'all' || w.c === testCfg.cat) && (testCfg.pile === 'all' || statusOf(w) === testCfg.pile));
+
+  function chips(name, list, value) {
+    return `<div class="piles left" role="group">${list.map(([k, label]) => `<button type="button" class="pile${k === value ? ' on' : ''}" data-${name}="${k}" aria-pressed="${k === value}">${label}</button>`).join('')}</div>`;
+  }
+
+  function renderTest() {
+    currentView = 'test';
+    if (!testRun) return renderTestSetup();
+    if (testRun.done) return renderTestResult();
+    renderQuestion();
+  }
+
+  function renderTestSetup() {
+    const pool = testPool();
+    const n = testCfg.len === 'all' ? pool.length : Math.min(+testCfg.len, pool.length);
+    $('#main').innerHTML = `
+      <section class="view-list">
+        <h2 class="page-title">Test</h2>
+        <p class="page-note">Pick what to be tested on. Right answers count as “knew it”, wrong ones as “didn’t know”.</p>
+        <div class="setup">
+          <div class="field">
+            <label for="t-cat">Category</label>
+            <select id="t-cat">${catOptions(testCfg.cat, 'All categories')}</select>
+          </div>
+          <div class="setup-group">
+            <span class="setup-label">Words</span>
+            ${chips('tpile', PILES, testCfg.pile)}
+          </div>
+          <div class="setup-group">
+            <span class="setup-label">Direction</span>
+            ${chips('tdir', DIRS, testCfg.dir)}
+          </div>
+          <div class="setup-group">
+            <span class="setup-label">Questions</span>
+            ${chips('tlen', LENGTHS, testCfg.len)}
+          </div>
+          <div class="add-actions">
+            <button class="btn-save" type="button" id="t-start"${n ? '' : ' disabled'}>Start · ${n} ${n === 1 ? 'question' : 'questions'}</button>
+            ${n ? '' : '<span class="status">No words match. Try another category or “All”.</span>'}
+          </div>
+        </div>
+      </section>`;
+    const keep = () => { try { localStorage.setItem('lexeis-test', JSON.stringify(testCfg)); } catch {} renderTestSetup(); };
+    $('#t-cat').addEventListener('change', e => { testCfg.cat = e.target.value; keep(); });
+    $('#main').querySelectorAll('[data-tpile]').forEach(b => b.addEventListener('click', () => { testCfg.pile = b.dataset.tpile; keep(); }));
+    $('#main').querySelectorAll('[data-tdir]').forEach(b => b.addEventListener('click', () => { testCfg.dir = b.dataset.tdir; keep(); }));
+    $('#main').querySelectorAll('[data-tlen]').forEach(b => b.addEventListener('click', () => { testCfg.len = b.dataset.tlen; keep(); }));
+    $('#t-start').addEventListener('click', () => startTest(shuffle(pool.slice()).slice(0, n)));
+  }
+
+  function makeQuestion(w) {
+    const dir = testCfg.dir === 'mix' ? (Math.random() < .5 ? 'ge' : 'eg') : testCfg.dir;
+    const ans = x => dir === 'ge' ? x.e : x.g;
+    const right = ans(w);
+    const seen = new Set([right.toLowerCase()]);
+    const options = [right];
+    // Wrong answers come from the same category first, then from everything else.
+    const sameCat = shuffle(state.words.filter(x => x.c === w.c && x.id !== w.id));
+    const others = shuffle(state.words.filter(x => x.c !== w.c));
+    for (const x of [...sameCat, ...others]) {
+      if (options.length >= 4) break;
+      const t = ans(x);
+      if (!seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); options.push(t); }
+    }
+    shuffle(options);
+    return { id: w.id, dir, options, right: options.indexOf(right), chosen: null };
+  }
+
+  function startTest(words) {
+    testRun = { qs: words.map(makeQuestion), i: 0, score: 0, done: false };
+    renderTest();
+  }
+
+  function renderQuestion() {
+    const q = testRun.qs[testRun.i];
+    const w = state.words.find(x => x.id === q.id);
+    if (!w) { nextQuestion(); return; }
+    const total = testRun.qs.length;
+    const answered = q.chosen !== null;
+    const promptGreek = q.dir === 'ge';
+    const promptText = promptGreek ? w.g : w.e;
+    $('#main').innerHTML = `
+      <section class="view-list test">
+        <div class="test-top">
+          <span class="test-count">Question ${testRun.i + 1} of ${total}</span>
+          <button class="btn-text" type="button" id="t-end">End test</button>
+        </div>
+        <div class="progress" aria-hidden="true"><span style="width:${(testRun.i / total) * 100}%"></span></div>
+        <div class="prompt">
+          <div class="prompt-word"${promptGreek ? ' lang="el"' : ''} style="--fs:${fitSize(promptText)}">${esc(promptText)}</div>
+          ${promptGreek && w.p ? `<div class="ipa">${esc(w.p)}</div>` : ''}
+          ${!promptGreek && answered && w.p ? `<div class="ipa">${esc(w.p)}</div>` : ''}
+          <div class="prompt-ask">${promptGreek ? 'What does it mean?' : 'How do you say it in Greek?'}</div>
+        </div>
+        <div class="opts">
+          ${q.options.map((o, i) => {
+            const cls = !answered ? '' : i === q.right ? ' right' : i === q.chosen ? ' wrong' : ' dim';
+            return `<button class="opt${cls}" type="button" data-opt="${i}"${promptGreek ? '' : ' lang="el"'}${answered ? ' disabled' : ''}>${esc(o)}</button>`;
+          }).join('')}
+        </div>
+        <div class="test-next">
+          ${answered ? `<span class="status">${q.chosen === q.right ? 'Right' : 'Not quite. The answer is highlighted.'}</span>
+          <button class="btn-save" type="button" id="t-next">${testRun.i + 1 < total ? 'Next' : 'See results'}</button>` : ''}
+        </div>
+      </section>`;
+    $('#t-end').addEventListener('click', () => { testRun.done = true; renderTest(); });
+    $('#main').querySelectorAll('[data-opt]').forEach(b => b.addEventListener('click', () => choose(+b.dataset.opt)));
+    $('#t-next')?.addEventListener('click', nextQuestion);
+  }
+
+  let advanceTimer;
+  function choose(i) {
+    const q = testRun.qs[testRun.i];
+    if (q.chosen !== null) return;
+    q.chosen = i;
+    const ok = i === q.right;
+    if (ok) testRun.score++;
+    const w = state.words.find(x => x.id === q.id);
+    if (w) { review(w, ok); save(null); }
+    renderQuestion();
+    clearTimeout(advanceTimer);
+    if (ok) advanceTimer = setTimeout(() => { if (currentView === 'test' && testRun && testRun.qs[testRun.i] === q) nextQuestion(); }, 900);
+  }
+
+  function nextQuestion() {
+    clearTimeout(advanceTimer);
+    testRun.i++;
+    if (testRun.i >= testRun.qs.length) testRun.done = true;
+    renderTest();
+  }
+
+  function renderTestResult() {
+    const asked = testRun.qs.filter(q => q.chosen !== null);
+    const missed = asked.filter(q => q.chosen !== q.right).map(q => state.words.find(x => x.id === q.id)).filter(Boolean);
+    const pct = asked.length ? Math.round((testRun.score / asked.length) * 100) : 0;
+    const line = !asked.length ? 'No questions answered.'
+      : pct === 100 ? 'Every one right.'
+      : `${pct}% right · ${missed.length} to review`;
+    $('#main').innerHTML = `
+      <section class="view-list">
+        <h2 class="page-title">Results</h2>
+        <div class="score"><span class="score-big">${testRun.score}</span><span class="score-of">/ ${asked.length}</span></div>
+        <p class="page-note">${line}</p>
+        <div class="cat-actions">
+          ${missed.length ? '<button class="btn-save" type="button" id="t-retry">Retry the ones I missed</button>' : ''}
+          <button class="btn-outline" type="button" id="t-new">New test</button>
+        </div>
+        ${missed.length ? `<h3 class="section-title">To review</h3>
+        <ul class="rows review-list">
+          ${missed.map(w => `<li><div class="word-row">
+            <span class="wr-greek" lang="el">${esc(w.g)}</span>
+            <span class="wr-english">${esc(w.e)}</span>
+            ${w.p ? `<span class="wr-ipa">${esc(w.p)}</span>` : ''}
+          </div></li>`).join('')}
+        </ul>` : ''}
+      </section>`;
+    $('#t-retry')?.addEventListener('click', () => startTest(shuffle(missed.slice())));
+    $('#t-new').addEventListener('click', () => { testRun = null; renderTest(); });
   }
 
   /* ---------- Sheets ---------- */
