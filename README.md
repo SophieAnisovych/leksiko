@@ -22,7 +22,7 @@ The home-screen app keeps its own saved words, separate from the Safari page, so
 | `index.html` | The page |
 | `styles.css` | Colours (Mediterranean Calm palette), fonts and layout |
 | `app.js` | Cards, categories, editing, Add words and file import |
-| `data/words.js` | The starting word list: 534 words in 20 categories |
+| `data/words.js` | The starting word list: 549 words in 20 categories |
 | `manifest.json`, `icons/` | App name, colours and home-screen icon |
 | `sw.js` | Keeps the app working offline |
 

@@ -1,7 +1,7 @@
 // Word list for Λέξεις. Replace this file in the repo to update the starting words.
 // "changes" lets the app apply list updates to words already saved on a device.
 window.LEXEIS_DATA = {
- "rev": 2,
+ "rev": 3,
  "cats": [
   {
    "id": "c1",
@@ -440,7 +440,7 @@ window.LEXEIS_DATA = {
   {
    "id": "w50",
    "g": "ξεχνάω / ξεχνώ",
-   "p": "[ksexˈnao] / [ksexˈno]",
+   "p": "[kseˈxnao] / [kseˈxno]",
    "e": "to forget",
    "c": "c1"
   },
@@ -3924,6 +3924,122 @@ window.LEXEIS_DATA = {
    "p": "[muˈsio]",
    "e": "museum",
    "c": "c5"
+  },
+  {
+   "id": "w1001",
+   "g": "όταν",
+   "p": "[ˈotan]",
+   "e": "when",
+   "c": "c17",
+   "n": "Not for questions (that’s πότε;) · όταν ήμασταν μικροί = when we were little"
+  },
+  {
+   "id": "w1002",
+   "g": "μαγειρεύω",
+   "p": "[majiˈrevo]",
+   "e": "to cook",
+   "c": "c1",
+   "n": "Past continuous: μαγείρευα = I was cooking"
+  },
+  {
+   "id": "w1003",
+   "g": "χτυπάω / χτυπώ",
+   "p": "[xtiˈpao] / [xtiˈpo]",
+   "e": "to hit, to knock; to ring (phone)",
+   "c": "c1",
+   "n": "Past continuous: χτυπούσα · χτύπησε το τηλέφωνο = the phone rang"
+  },
+  {
+   "id": "w1004",
+   "g": "ταξιδεύω",
+   "p": "[taksiˈðevo]",
+   "e": "to travel",
+   "c": "c1",
+   "n": "Past continuous: ταξίδευα = I was travelling / I used to travel"
+  },
+  {
+   "id": "w1005",
+   "g": "πέρυσι",
+   "p": "[ˈperisi]",
+   "e": "last year",
+   "c": "c7",
+   "n": "Also written πέρσι [ˈpersi]"
+  },
+  {
+   "id": "w1006",
+   "g": "η Κυριακή",
+   "p": "[kirjaˈki]",
+   "e": "Sunday",
+   "c": "c7",
+   "n": "κάθε Κυριακή = every Sunday · days of the week start with a capital"
+  },
+  {
+   "id": "w1007",
+   "g": "Στην ώρα",
+   "p": "[stin ˈora]",
+   "e": "On time",
+   "c": "c14",
+   "n": "στην ώρα τους = on time (lit. at their hour)"
+  },
+  {
+   "id": "w1008",
+   "g": "πάντα",
+   "p": "[ˈpanda]",
+   "e": "always",
+   "c": "c16"
+  },
+  {
+   "id": "w1009",
+   "g": "συχνά",
+   "p": "[siˈxna]",
+   "e": "often",
+   "c": "c16"
+  },
+  {
+   "id": "w1010",
+   "g": "γρήγορα",
+   "p": "[ˈɣriɣora]",
+   "e": "fast, quickly",
+   "c": "c16",
+   "n": "Adverb of γρήγορος · έτρεχαν γρήγορα = they were running fast"
+  },
+  {
+   "id": "w1011",
+   "g": "τους",
+   "p": "[tus]",
+   "e": "their; them",
+   "c": "c17",
+   "n": "Goes after the noun: τα κλειδιά τους = their keys · also the article: τους λογαριασμούς"
+  },
+  {
+   "id": "w1012",
+   "g": "το γήπεδο",
+   "p": "[ˈjipeðo]",
+   "e": "sports ground, pitch; stadium",
+   "c": "c20"
+  },
+  {
+   "id": "w1013",
+   "g": "η εφημερίδα",
+   "p": "[efimeˈriða]",
+   "e": "newspaper",
+   "c": "c20"
+  },
+  {
+   "id": "w1014",
+   "g": "ο ενεστώτας",
+   "p": "[eneˈstotas]",
+   "e": "present tense",
+   "c": "c18",
+   "n": "διαβάζω = I read / I am reading"
+  },
+  {
+   "id": "w1015",
+   "g": "ο παρατατικός",
+   "p": "[paratatiˈkos]",
+   "e": "past continuous (tense)",
+   "c": "c18",
+   "n": "διάβαζα = I was reading / I used to read"
   }
  ],
  "changes": [
@@ -4089,6 +4205,18 @@ window.LEXEIS_DATA = {
      "c",
      "c15",
      "c21"
+    ]
+   ]
+  },
+  {
+   "rev": 3,
+   "note": "Past continuous homework words; stress mark in ξεχνάω",
+   "set": [
+    [
+     "w50",
+     "p",
+     "[ksexˈnao] / [ksexˈno]",
+     "[kseˈxnao] / [kseˈxno]"
     ]
    ]
   }

@@ -82,7 +82,7 @@
   /* ---------- Greek → IPA (spelling rules; same style as the word list) ---------- */
   const ACC = { 'ά': 'α', 'έ': 'ε', 'ή': 'η', 'ί': 'ι', 'ό': 'ο', 'ύ': 'υ', 'ώ': 'ω', 'ΐ': 'ϊ', 'ΰ': 'ϋ' };
   const VOICELESS = 'θκξπστφχψς';
-  const ONSETS = new Set(['pr','tr','kr','pl','kl','fr','fl','vr','vl','ɣr','ɣl','θr','xr','xl','br','dr','gr','bl','gl','sp','st','sk','sx','sf','sθ','spr','str','skr','skl','sm','sn','kt','pt','fθ','xθ','ɣn','mn','ks','ps','ts','dz','vɣ','ðr','θn','kn','pn','zm','zv','zɣ','sl','vð']);
+  const ONSETS = new Set(['xn','pr','tr','kr','pl','kl','fr','fl','vr','vl','ɣr','ɣl','θr','xr','xl','br','dr','gr','bl','gl','sp','st','sk','sx','sf','sθ','spr','str','skr','skl','sm','sn','kt','pt','fθ','xθ','ɣn','mn','ks','ps','ts','dz','vɣ','ðr','θn','kn','pn','zm','zv','zɣ','sl','vð']);
   const VMAP = { 'α': 'a', 'ε': 'e', 'η': 'i', 'ι': 'i', 'ϊ': 'i', 'ο': 'o', 'υ': 'i', 'ϋ': 'i', 'ω': 'o' };
   const CMAP = { 'β': 'v', 'γ': 'ɣ', 'δ': 'ð', 'ζ': 'z', 'θ': 'θ', 'κ': 'k', 'λ': 'l', 'μ': 'm', 'ν': 'n', 'ξ': 'ks', 'π': 'p', 'ρ': 'r', 'σ': 's', 'ς': 's', 'τ': 't', 'φ': 'f', 'χ': 'x', 'ψ': 'ps' };
   function wordIpa(raw) {
