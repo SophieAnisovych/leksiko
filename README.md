@@ -15,6 +15,15 @@ It works offline after the first launch. Updates you push to GitHub reach the ap
 
 The home-screen app keeps its own saved words, separate from the Safari page, so pick one and stick with it.
 
+## Sharing with a class
+
+Send other learners **https://sophieanisovych.github.io/leksiko/class/**. It's the same app, but it starts with no words: everyone adds their own. Its saved words and progress are kept apart from the main app's, even on the same device.
+
+- **Where students' words are saved:** in their own browser, on their own device. Nothing is sent anywhere, and there are no accounts, so nobody else (not even the tutor) can see them.
+- **Install first:** on iPhone and iPad, add the app to the Home Screen (Share → Add to Home Screen) before adding words. The Home Screen app and a Safari tab keep separate data, and Safari clears a site's data after 7 days without a visit; Home Screen apps don't.
+- **Backups:** Categories → Backup → Download backup. Deleting the app, clearing Safari data or private browsing loses words that aren't backed up.
+- **Lists from AI:** Add words → Copy the AI prompt, paste it into ChatGPT, Claude or Gemini with the homework, then Paste a list. The importer also reads tables, CSV files, numbered or bulleted lists, and headings as categories.
+
 ## What's inside
 
 | File | What it is |
@@ -24,6 +33,7 @@ The home-screen app keeps its own saved words, separate from the Safari page, so
 | `app.js` | Cards, categories, editing, Add words and file import |
 | `data/words.js` | The starting word list: 549 words in 20 categories |
 | `data/verbs.js` | Conjugation tables for the 57 verbs, in five tenses |
+| `class/` | The class link: the same app, starting empty |
 | `manifest.json`, `icons/` | App name, colours and home-screen icon |
 | `sw.js` | Keeps the app working offline |
 
@@ -32,7 +42,7 @@ The home-screen app keeps its own saved words, separate from the Safari page, so
 - **Cards:** tap to flip, swipe left or right for the next word.
 - **Menu → Categories:** tap a category to see its words. The square pencil button turns on editing: on the Categories page you rename or add categories, inside a category you edit or delete words.
 - **Menu → Add words:** type the Greek and the translation. The pronunciation fills in automatically from Greek spelling rules, and the category can be chosen for you.
-- **Import a file:** `.txt`, `.csv`, `.xlsx`, `.pdf` or `.docx` with one word per line, such as `η πόλη = city` or `η πόλη<TAB>city<TAB>City & transport`. You review the list before anything is added.
+- **Import a file or paste a list:** `.txt`, `.csv`, `.xlsx`, `.pdf` or `.docx`, or text pasted from an AI chat. One word per line (`η πόλη = city`), `Greek | pronunciation | English | category` rows, tables and CSV files all work. You review the list before anything is added.
 
 ## Learning
 

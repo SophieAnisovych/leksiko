@@ -1,5 +1,10 @@
 (() => {
-  const STORAGE_KEY = 'lexeis-words-v1';
+  // An edition can set window.LEXEIS_CONFIG before this script. The class link (class/index.html)
+  // uses its own prefix, so its saved words never mix with the main app's, even on one device.
+  const CONFIG = window.LEXEIS_CONFIG || {};
+  const PREFIX = CONFIG.storagePrefix || 'lexeis';
+  const STORAGE_KEY = PREFIX + '-words-v1';
+  const prefKey = name => PREFIX + '-' + name;
   const SEED = window.LEXEIS_DATA || { rev: 1, cats: [], words: [] };
   const clone = x => JSON.parse(JSON.stringify(x));
   // Ids for things made on this device can never clash with ids in data/words.js.
@@ -179,12 +184,14 @@
 
   // Rough guess for when Claude isn't available.
   function guessCategory(g, e) {
-    const pick = name => catByName(name)?.name || null;
-    if (/^\d+$/.test(String(e).trim())) return pick('Numbers');
+    const pick = name => catByName(name)?.name || name;
+    const en = String(e || '').trim();
+    if (/^\d+$/.test(en)) return pick('Numbers');
     if (/\(-|, ?-/.test(g)) return pick('Adjectives');
     const one = g.trim().split(/\s+/);
     if (one.length === 1 && /(ω|ώ|ομαι|άμαι|ούμαι)$/.test(one[0].toLowerCase())) return pick('Verbs');
-    if (/^(ο|η|το|τα|οι)\s/i.test(g.trim())) return pick('Nouns');
+    if (/^to\s/i.test(en) && /(ω|ώ|μαι)(\s|\/|$)/.test(g.trim().toLowerCase())) return pick('Verbs');
+    if (/^(ο|η|το|τα|οι)\s/i.test(g.trim())) return catByName('Nouns')?.name || null;
     if (one.length > 2) return pick('Phrases');
     return null;
   }
@@ -379,12 +386,15 @@
     }, 260);
   }
 
+  // Running from the Home Screen (as an installed app) rather than in a browser tab.
+  const installed = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+
   /* ---------- Card deck ---------- */
   const PILES = [['all', 'All'], ['new', 'New'], ['learning', 'Absorbing'], ['solid', 'Solid']];
   let pile = 'all';
-  try { const p = localStorage.getItem('lexeis-pile'); if (PILES.some(([k]) => k === p)) pile = p; } catch {}
+  try { const p = localStorage.getItem(prefKey('pile')); if (PILES.some(([k]) => k === p)) pile = p; } catch {}
   let studyCat = 'all';
-  try { const c = localStorage.getItem('lexeis-cat'); if (c && catById(c)) studyCat = c; } catch {}
+  try { const c = localStorage.getItem(prefKey('cat')); if (c && catById(c)) studyCat = c; } catch {}
   const inStudyCat = w => studyCat === 'all' || w.c === studyCat;
   let deck = [];
   let pos = 0;
@@ -408,7 +418,7 @@
     state.cats.map(c => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${esc(c.name)} · ${wordsIn(c.id).length}</option>`).join('');
   function studyCategory(id) {
     studyCat = id;
-    try { localStorage.setItem('lexeis-cat', id); } catch {}
+    try { localStorage.setItem(prefKey('cat'), id); } catch {}
     buildDeck();
   }
 
@@ -435,12 +445,15 @@
           <span class="hint">tap the card to flip</span>
           <button class="answer" type="button" id="ans-yes">Knew it →</button>
         </div>
+        <button class="btn-save" type="button" id="empty-cta" hidden>Add your first words</button>
+        <p class="install-tip" id="install-tip" hidden>On a phone or iPad, first add this app to your Home Screen (in Safari: Share → Add to Home Screen) and add your words there. Words added in a browser tab stay in that tab.</p>
       </section>`;
     paintCard();
+    $('#empty-cta').addEventListener('click', () => go('add'));
     $('#card-info').addEventListener('click', () => { const w = currentWord(); if (w) openVerbInfo(w, 'pres'); });
     $('#main').querySelectorAll('[data-pile]').forEach(b => b.addEventListener('click', () => {
       pile = b.dataset.pile;
-      try { localStorage.setItem('lexeis-pile', pile); } catch {}
+      try { localStorage.setItem(prefKey('pile'), pile); } catch {}
       buildDeck();
       renderCards();
     }));
@@ -464,9 +477,15 @@
     ['#ans-no', '#ans-yes'].forEach(id => { const b = $(id); if (b) b.disabled = !w; });
     const info = $('#card-info');
     if (info) info.hidden = !verbData(w);
+    const noWords = state.words.length === 0;
+    const cta = $('#empty-cta'), answers = $('#main .answers'), tip = $('#install-tip'), speak = $('#card-speak');
+    if (cta) cta.hidden = !noWords;
+    if (answers) answers.hidden = noWords;
+    if (tip) tip.hidden = !noWords || installed;
+    if (speak) speak.hidden = !w;
     if (!w) {
       const anyHere = state.words.some(inStudyCat);
-      const msg = !anyHere ? 'No words here yet'
+      const msg = noWords ? 'Your words will appear here' : !anyHere ? 'No words here yet'
         : pile === 'all' ? 'All caught up. Solid words come back when they’re due.'
         : `No ${STATUS[pile].toLowerCase()} words here`;
       card.innerHTML = `<div class="face front"><div class="word" style="--fs:7">${msg}</div></div>`;
@@ -572,7 +591,7 @@
   const verbEnglish = (w, t) => verbData(w)?.en?.[t] || w.e;
 
   let tense = 'pres';
-  try { const t = localStorage.getItem('lexeis-tense'); if (TENSES.some(([k]) => k === t)) tense = t; } catch {}
+  try { const t = localStorage.getItem(prefKey('tense')); if (TENSES.some(([k]) => k === t)) tense = t; } catch {}
   let vdeck = [];
   let vpos = 0;
   const hasTense = w => tense === 'pres' || !!tenseForms(verbData(w), tense);
@@ -616,7 +635,7 @@
     paintVerb();
     $('#main').querySelectorAll('[data-tense]').forEach(b => b.addEventListener('click', () => {
       tense = b.dataset.tense;
-      try { localStorage.setItem('lexeis-tense', tense); } catch {}
+      try { localStorage.setItem(prefKey('tense'), tense); } catch {}
       renderVerbs();
     }));
     $('#card-speak')?.addEventListener('click', () => { const w = currentVerb(); if (w) speakGreek(verbFront(w, tense).text); });
@@ -631,14 +650,18 @@
     if (!card) return;
     const w = currentVerb();
     ['#ans-no', '#ans-yes'].forEach(id => { const b = $(id); if (b) b.disabled = !w; });
-    const info = $('#card-info');
+    const info = $('#card-info'), speak = $('#card-speak');
     if (info) info.hidden = !w;
+    if (speak) speak.hidden = !w;
     const vs = state.words.filter(isVerb);
     const inTense = vs.filter(hasTense);
     const solid = inTense.filter(x => statusOf(peekStatus(x, tense)) === 'solid').length;
-    const noTable = vs.length - inTense.length;
+    const noTable = tense === 'pres' ? 0 : vs.filter(x => !verbData(x)).length;
+    const notUsed = vs.length - inTense.length - noTable;
     const count = $('#verb-count');
-    if (count) count.textContent = `${inTense.length - solid} to learn · ${solid} solid` + (noTable ? ` · ${noTable} not used in this tense` : '');
+    if (count) count.textContent = vs.length
+      ? `${inTense.length - solid} to learn · ${solid} solid` + (noTable ? ` · ${noTable} without tables yet` : '') + (notUsed ? ` · ${notUsed} not used in this tense` : '')
+      : 'Words in a category called Verbs appear here';
     if (!w) {
       const msg = vs.length ? `All caught up in the ${tenseInfo(tense)[1].toLowerCase()}. Solid verbs come back when they’re due.` : 'No verbs yet';
       card.innerHTML = `<div class="face front"><div class="word" style="--fs:6.6">${msg}</div></div>`;
@@ -827,7 +850,7 @@
         </ul>` : `<p class="empty">No words in this category yet.</p>`}
       </section>`;
     $('#to-cats').addEventListener('click', () => go('categories'));
-    $('#study-this')?.addEventListener('click', () => { studyCategory(id); pile = 'all'; try { localStorage.setItem('lexeis-pile', pile); } catch {} buildDeck(); go(''); });
+    $('#study-this')?.addEventListener('click', () => { studyCategory(id); pile = 'all'; try { localStorage.setItem(prefKey('pile'), pile); } catch {} buildDeck(); go(''); });
     $('#test-this')?.addEventListener('click', () => { testCfg.cat = id; testRun = null; go('test'); });
     if (ws.length) wireEditToggle();
     $('#main').querySelectorAll('[data-word]').forEach(b => b.addEventListener('click', () => openWordSheet(b.dataset.word)));
@@ -841,7 +864,7 @@
   const LENGTHS = [['10', '10'], ['20', '20'], ['all', 'All']];
   const MODES = [['choice', 'Choose from four'], ['flip', 'Flip and check']];
   let testCfg = { cat: 'all', pile: 'all', dir: 'ge', len: '10', mode: 'choice' };
-  try { Object.assign(testCfg, JSON.parse(localStorage.getItem('lexeis-test')) || {}); } catch {}
+  try { Object.assign(testCfg, JSON.parse(localStorage.getItem(prefKey('test'))) || {}); } catch {}
   if (testCfg.cat !== 'all' && !catById(testCfg.cat)) testCfg.cat = 'all';
   let testRun = null; // { qs: [...], i, score, done }
   const testPool = () => state.words.filter(w => (testCfg.cat === 'all' || w.c === testCfg.cat) && (testCfg.pile === 'all' || statusOf(w) === testCfg.pile));
@@ -894,7 +917,7 @@
           </div>
         </div>
       </section>`;
-    const keep = () => { try { localStorage.setItem('lexeis-test', JSON.stringify(testCfg)); } catch {} renderTestSetup(); };
+    const keep = () => { try { localStorage.setItem(prefKey('test'), JSON.stringify(testCfg)); } catch {} renderTestSetup(); };
     $('#t-cat').addEventListener('change', e => { testCfg.cat = e.target.value; keep(); });
     $('#main').querySelectorAll('[data-tpile]').forEach(b => b.addEventListener('click', () => { testCfg.pile = b.dataset.tpile; keep(); }));
     $('#main').querySelectorAll('[data-tdir]').forEach(b => b.addEventListener('click', () => { testCfg.dir = b.dataset.tdir; keep(); }));
@@ -1275,13 +1298,59 @@
     const box = $('#import');
     if (!box) return;
     const job = importJob;
-    if (!job) {
+    if (!job || job.status === 'paste') {
+      const pasting = job?.status === 'paste';
       box.innerHTML = `
-        <button class="btn-outline" type="button" id="pick-file">Import a file</button>
-        <p class="import-note">A word list, spreadsheet, PDF or Word file with one word per line, like “η πόλη = city”. The app adds the pronunciation and guesses the category. You check the list before anything is added.</p>
+        ${pasting ? `
+          <div class="field">
+            <label for="paste-box">Paste your list</label>
+            <textarea id="paste-box" rows="9" lang="el" spellcheck="false" placeholder="το σπίτι | [ˈspiti] | house | Home">${esc(job.text || '')}</textarea>
+          </div>
+          <div class="add-actions">
+            <button class="btn-save" type="button" id="paste-read">Read the list</button>
+            <button class="btn-text" type="button" id="paste-cancel">Cancel</button>
+          </div>` : `
+          <div class="import-actions">
+            <button class="btn-outline" type="button" id="pick-file">Import a file</button>
+            <button class="btn-outline" type="button" id="paste-open">Paste a list</button>
+          </div>
+          <p class="import-note">One word per line works best, like “η πόλη = city”. Tables and lists from AI chats work too. The app adds the pronunciation if it’s missing, and you check everything before it’s added.</p>`}
+        <div class="ai-help">
+          <h3 class="ai-title">Turn your homework into a list with AI</h3>
+          <ol class="ai-steps">
+            <li>Tap <strong>Copy the AI prompt</strong>.</li>
+            <li>Open ChatGPT, Claude or Gemini, paste the prompt and attach your homework (a photo or a PDF).</li>
+            <li>Copy the AI’s answer, tap <strong>Paste a list</strong> and paste it in.</li>
+          </ol>
+          <button class="btn-outline small" type="button" id="copy-prompt">Copy the AI prompt</button>
+          <textarea class="prompt-text" id="prompt-text" rows="8" readonly hidden></textarea>
+        </div>
         <input type="file" id="file-in" accept="${ACCEPT}" hidden>`;
-      $('#pick-file').addEventListener('click', () => $('#file-in').click());
+      $('#pick-file')?.addEventListener('click', () => $('#file-in').click());
       $('#file-in').addEventListener('change', ev => { const f = ev.target.files[0]; if (f) startImport(f); });
+      $('#paste-open')?.addEventListener('click', () => { importJob = { status: 'paste', text: '' }; renderImport(); $('#paste-box').focus(); });
+      const pasteBox = $('#paste-box');
+      pasteBox?.addEventListener('input', () => { job.text = pasteBox.value; });
+      $('#paste-cancel')?.addEventListener('click', () => { importJob = null; renderImport(); });
+      $('#paste-read')?.addEventListener('click', () => {
+        const text = pasteBox.value;
+        if (!text.trim()) { pasteBox.focus(); return; }
+        startPaste(text);
+      });
+      $('#copy-prompt').addEventListener('click', async () => {
+        const prompt = aiPrompt();
+        const fallback = $('#prompt-text');
+        try {
+          await navigator.clipboard.writeText(prompt);
+          toast('Prompt copied. Paste it into your AI chat with your homework.', 3500);
+        } catch {
+          fallback.value = prompt;
+          fallback.hidden = false;
+          fallback.focus();
+          fallback.select();
+          toast('Copy the prompt from the box below.', 3500);
+        }
+      });
       return;
     }
     if (job.status === 'reading') {
@@ -1296,8 +1365,8 @@
     if (job.status === 'error') {
       box.innerHTML = `
         <p class="error">${esc(job.message)}</p>
-        <button class="btn-outline" type="button" id="imp-again">Choose another file</button>`;
-      $('#imp-again').addEventListener('click', () => { importJob = null; renderImport(); $('#pick-file').click(); });
+        <button class="btn-outline" type="button" id="imp-again">Try again</button>`;
+      $('#imp-again').addEventListener('click', () => { importJob = null; renderImport(); });
       return;
     }
     // review
@@ -1305,7 +1374,7 @@
     const chosen = items.filter(it => it.on).length;
     const newCats = [...new Set(items.filter(it => it.on && !catByName(it.c)).map(it => it.c))];
     box.innerHTML = `
-      <h3 class="section-title">From “${esc(job.file)}”</h3>
+      <h3 class="section-title">${job.pasted ? 'From your pasted list' : `From “${esc(job.file)}”`}</h3>
       <p class="page-note tight">${plural(items.length)} found${job.dupes ? ` · ${job.dupes} already in your app, unticked` : ''}${job.note ? ` · ${esc(job.note)}` : ''}</p>
       ${newCats.length ? `<p class="page-note tight">New ${newCats.length === 1 ? 'category' : 'categories'}: ${newCats.map(esc).join(', ')}</p>` : ''}
       <ul class="rows review">
@@ -1359,7 +1428,10 @@
     if (/\.(xlsx|xls|ods)$/.test(name)) {
       const XLSX = await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX');
       const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-      return wb.SheetNames.map(n => `# ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n], { FS: '\t' })).join('\n\n');
+      // A sheet's name becomes a category heading, unless it's a default name like "Sheet1".
+      const named = wb.SheetNames.length > 1;
+      return wb.SheetNames.map(n => (named && !/^(sheet|φύλλο|feuille|blatt|hoja)\s*\d*$/i.test(n) ? `# ${n}\n` : '')
+        + XLSX.utils.sheet_to_csv(wb.Sheets[n], { FS: '\t' })).join('\n\n');
     }
     if (/\.pdf$/.test(name)) {
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js', 'pdfjsWorker');
@@ -1382,32 +1454,173 @@
     return await file.text();
   }
 
-  // Line-by-line reader for simple lists, used when Claude isn't available.
-  function parseLocally(text) {
+  /* ---------- Reading word lists: files, pasted text and AI answers ---------- */
+  // Understands one-per-line lists ("η πόλη = city", "η πόλη – city"), tables with | or tabs,
+  // CSV files, numbered or bulleted lists with **bold**, pronunciation in [brackets] or
+  // /slashes/, transliterations in (brackets), header rows, and headings used as categories.
+  const POS_CATEGORIES = [
+    [/^(verbs?|ρήματα|ρήμα)$/i, 'Verbs'],
+    [/^(nouns?|ουσιαστικά|ουσιαστικό)$/i, 'Nouns'],
+    [/^(adjectives?|επίθετα|επίθετο)$/i, 'Adjectives'],
+    [/^(adverbs?|επιρρήματα|επίρρημα)$/i, 'Adverbs'],
+    [/^(phrases?|expressions?|φράσεις|φράση|εκφράσεις)$/i, 'Phrases'],
+    [/^(numbers?|αριθμοί|αριθμός)$/i, 'Numbers'],
+    [/^(pronouns?|prepositions?|conjunctions?|articles?)$/i, 'Grammar words'],
+  ];
+  const HEADERS = [
+    ['g', /^(greek|ελληνικά|ελληνική|λέξη|λέξεις|word|words|term|vocabulary)$/i],
+    ['e', /^(english|αγγλικά|meaning|meanings|translation|μετάφραση|σημασία|definition|in english)$/i],
+    ['p', /^(ipa|pronunciation|προφορά|phonetics?|transcription|μεταγραφή)$/i],
+    ['c', /^(category|categories|κατηγορία|topic|theme|group|type|part of speech|pos|είδος)$/i],
+    ['skip', /^(transliteration|romani[sz]ation|latin|greeklish|notes?|σημειώσεις|examples?|παράδειγμα|#|no\.?|n°|nr\.?)$/i],
+  ];
+  const IPA_MARKS = /[ˈˌðθɣʝçŋɾʎɲʃʒ]/;
+  const looksIpa = x => /^\s*\[[^\]]+\]\s*$/.test(x) || /^\s*\/[^/]+\/\s*$/.test(x) || IPA_MARKS.test(x);
+  const looksTranslit = x => !hasGreek(x) && /[áéíóúýǘ]/i.test(x) && !IPA_MARKS.test(x);
+  const asIpa = x => { const t = x.trim().replace(/^\/(.*)\/$/, '[$1]'); return /^\[.*\]$/.test(t) ? t : `[${t}]`; };
+  const cleanCell = x => String(x || '')
+    .replace(/\*\*|__|`/g, '').replace(/^\*+|\*+$/g, '')
+    .replace(/^["“”'‘’«]+|["“”'‘’»]+$/g, '').replace(/\s+/g, ' ').trim();
+  // Drop a stray bracket left over from splitting a sentence ("πληρώνω)" → "πληρώνω").
+  function balanceBrackets(x) {
+    let t = x;
+    const opens = (t.match(/\(/g) || []).length, closes = (t.match(/\)/g) || []).length;
+    if (opens > closes) t = t.replace(/\s*\([^()]*$/, '');
+    else if (closes > opens) t = t.replace(/\)(?=[^)]*$)/, '');
+    return t.trim();
+  }
+  const pairParts = x => x.split(/\s*(?:=>|->|→|=)\s*|\s+-\s+|\s*[–—]\s*|:\s+/).map(t => t.trim()).filter(Boolean);
+  function splitCsv(line, d) {
     const out = [];
-    for (const raw of text.split(/\r?\n/)) {
-      const line = raw.trim();
-      if (!line || !hasGreek(line)) continue;
-      let g = '', e = '', c = '';
-      const cols = line.split('\t').map(s => s.trim()).filter(Boolean);
-      if (cols.length >= 2) {
-        const gi = cols.findIndex(hasGreek);
-        g = cols[gi];
-        const rest = cols.filter((_, i) => i !== gi);
-        const catCol = rest.find(x => catByName(x));
-        if (catCol) c = catByName(catCol).name;
-        e = rest.find(x => x !== catCol && !/^\[.*\]$/.test(x) && x !== cols[gi]) || '';
-      } else {
-        const m = line.match(/^(.+?)\s*(?:=|—|–|:|\s-\s)\s*(.+)$/) || line.match(/^(.+?)\s*\(([^)]*[a-z][^)]*)\)\s*$/i);
-        if (!m) continue;
-        [g, e] = hasGreek(m[1]) ? [m[1], m[2]] : [m[2], m[1]];
+    let cur = '', quoted = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (quoted) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else quoted = false; } else cur += ch; }
+      else if (ch === '"') quoted = true;
+      else if (ch === d) { out.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur);
+    return out;
+  }
+  function tidyCategory(name) {
+    let c = cleanCell(name).replace(/^#+\s*/, '').replace(/:\s*$/, '').trim();
+    const paren = c.match(/^(.*?)\s*\(([^()]+)\)$/);             // "Ρήματα (Verbs)" → "Verbs"
+    if (paren && hasGreek(paren[1]) && !hasGreek(paren[2])) c = paren[2].trim();
+    for (const [re, label] of POS_CATEGORIES) if (re.test(c)) return catByName(label)?.name || label;
+    if (!c || c.length > 40) return '';
+    return catByName(c)?.name || c.charAt(0).toUpperCase() + c.slice(1);
+  }
+  function headerMap(cells) {
+    const map = { skip: [] };
+    let hits = 0;
+    cells.forEach((cell, i) => {
+      const t = cleanCell(cell).toLowerCase();
+      for (const [key, re] of HEADERS) {
+        if (!re.test(t)) continue;
+        hits++;
+        if (key === 'skip') map.skip.push(i); else if (map[key] == null) map[key] = i;
+        break;
       }
-      g = g.replace(/^[\d.)\s•\-]+/, '').trim();
-      e = e.trim();
-      if (!g || !e || !hasGreek(g) || hasGreek(e)) continue;
-      out.push({ g, e, p: phraseIpa(g), c: c || guessCategory(g, e) || 'Imported' });
+    });
+    return hits >= 2 ? map : null;
+  }
+  function fromCells(rawCells, map) {
+    const cells = rawCells.map(x => balanceBrackets(cleanCell(x)));
+    const used = new Set(map ? map.skip : []);
+    const take = i => { used.add(i); return cells[i] || ''; };
+    let g = map && map.g != null ? take(map.g) : '';
+    let e = map && map.e != null ? take(map.e) : '';
+    let p = map && map.p != null ? take(map.p) : '';
+    let c = map && map.c != null ? take(map.c) : '';
+    if (!hasGreek(g)) { const i = cells.findIndex((x, j) => !used.has(j) && hasGreek(x)); g = i >= 0 ? take(i) : ''; }
+    if (p && !looksIpa(p)) p = '';  // a "pronunciation" written in Latin letters is a transliteration
+    if (!p) { const i = cells.findIndex((x, j) => !used.has(j) && x && !hasGreek(x) && looksIpa(x)); if (i >= 0) p = take(i); }
+    const rest = cells.map((x, j) => [x, j]).filter(([x, j]) => !used.has(j) && x && !hasGreek(x) && !looksTranslit(x) && !looksIpa(x));
+    if (!e && rest.length) e = rest.shift()[0];
+    if (!c && !(map && map.c != null) && rest.length && rest[0][0].length <= 30 && rest[0][0].split(/\s+/).length <= 3) c = rest.shift()[0];
+    return { g, e, p, c };
+  }
+  function tidyGreek(g, item) {
+    let t = cleanCell(g);
+    const bracket = t.match(/\[[^\]]+\]|\/[^\s/][^/]*[^\s/]\//);
+    if (bracket && looksIpa(bracket[0])) { if (!item.p) item.p = bracket[0]; t = t.replace(bracket[0], ' '); }
+    t = t.replace(/\s*\(([^()]*)\)/g, (m, inner) => hasGreek(inner) ? m : ' ');  // drop "(to spíti)"
+    return t.replace(/\s+/g, ' ').trim();
+  }
+  function parseList(text, fileName = '') {
+    const lines = String(text || '').replace(/\r/g, '').split('\n');
+    const first = lines.find(l => l.trim()) || '';
+    const csv = /\.csv$/i.test(fileName) ? (first.split(';').length > first.split(',').length ? ';' : ',') : null;
+    const out = [];
+    let map = null, heading = '';
+    const push = item => {
+      const it = { g: item.g, e: item.e, p: item.p, c: item.c };
+      it.g = tidyGreek(it.g, it);
+      it.e = cleanCell(it.e);
+      if (!it.g || !it.e || !hasGreek(it.g) || !/[A-Za-z0-9]/.test(it.e)) return;
+      it.p = it.p && looksIpa(it.p) ? asIpa(it.p) : phraseIpa(it.g);
+      it.c = tidyCategory(it.c) || heading || guessCategory(it.g, it.e) || 'Imported';
+      out.push(it);
+    };
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (/^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$/.test(line)) continue;    // table rule |---|---|
+      // Headings set the category for the lines under them.
+      const bare = line.replace(/^[-*•·>\s]+(?=\*\*)/, '');
+      const md = line.match(/^#{1,6}\s+(.+)$/);
+      let headingText = md ? md[1] : null;
+      if (headingText == null && /^\*\*[^*]+\*\*:?$/.test(bare) && pairParts(cleanCell(bare)).length < 2) headingText = bare;
+      if (headingText == null && !hasGreek(line) && !/[|\t]/.test(line) && /^[^=–—]{1,30}:$/.test(bare) && bare.split(/\s+/).length <= 4) headingText = bare;
+      if (headingText != null) { heading = tidyCategory(headingText); map = null; continue; }
+      // Rows with columns: | pipes |, tabs, or a CSV file.
+      let cells = null;
+      if (line.includes('|')) cells = line.replace(/^\|/, '').replace(/\|$/, '').split('|');
+      else if (line.includes('\t')) cells = line.split('\t');
+      else if (csv && line.includes(csv)) cells = splitCsv(line, csv);
+      if (cells) {
+        cells = cells.map(x => x.trim());
+        const header = headerMap(cells);
+        if (header) { map = header; continue; }
+        if (!map && cells.length >= 3 && /^\d+[.)]?$/.test(cells[0])) cells = cells.slice(1);  // row numbers
+        if (cells.some(hasGreek)) push(fromCells(cells, map));
+        continue;
+      }
+      map = null;  // a plain line ends a table
+      if (!hasGreek(line)) continue;
+      const item = line.replace(/^\s*(?:[-*•·>]+|\(?\d+[.)]|\d+\s+[-–])\s+/, '');
+      const parts = pairParts(item);
+      if (parts.length >= 2) { push(fromCells(parts, null)); continue; }
+      // "Αν (if)": the meaning in brackets after the Greek.
+      const m = cleanCell(item).match(/^(.*?\S)\s*\(([^()]*[A-Za-z][^()]*)\)\s*[.;!?]?$/);
+      if (m && hasGreek(m[1]) && !hasGreek(m[2]) && !looksTranslit(m[2])) push({ g: m[1], e: m[2], p: '', c: '' });
     }
     return out;
+  }
+
+  // A prompt students paste into an AI chat with their homework, so the answer comes back
+  // in a format the reader above understands.
+  function aiPrompt() {
+    const cats = state.cats.map(c => c.name);
+    return [
+      'I’m learning Greek. Make a vocabulary list from the homework I’m attaching (or pasting below).',
+      '',
+      'Rules:',
+      '- One word or short phrase per line, in exactly this format:',
+      '  Greek | pronunciation | English | category',
+      '- Greek: nouns with their article (ο, η, το), verbs in the first person (διαβάζω).',
+      '- Pronunciation: IPA in square brackets, with ˈ before the stressed syllable, for example [kaliˈmera].',
+      '- English: a short meaning.',
+      cats.length
+        ? `- Category: one of these if it fits: ${cats.join(', ')}. Otherwise a short new one, like Food or Verbs.`
+        : '- Category: one or two words, like Verbs, Food, Home, Time or Phrases.',
+      '- Only the list: no title, no numbering, no bold, nothing before or after it.',
+      '',
+      'Example:',
+      'το σπίτι | [ˈspiti] | house | Home',
+      'διαβάζω | [ðjaˈvazo] | to read | Verbs',
+    ].join('\n');
   }
 
   async function startImport(file) {
@@ -1415,27 +1628,41 @@
     importJob = { status: 'reading', file: file.name, message: `Reading “${file.name}”…`, ctl };
     renderImport();
     const isImage = /^image\//.test(file.type);
-    let text = '', note = '';
+    let text = '';
     try {
       if (!isImage) text = await fileToText(file);
     } catch {
-      importJob = { status: 'error', message: `Couldn’t open “${file.name}”. Try a .txt, .csv, .xlsx, .pdf or .docx file, or a photo.` };
+      importJob = { status: 'error', message: `Couldn’t open “${file.name}”. Try a .txt, .csv, .xlsx, .pdf or .docx file, or paste the list instead.` };
       return renderImport();
     }
     if (importJob?.ctl !== ctl) return;
+    await readList({ text, name: file.name, isImage, file, ctl });
+  }
+  function startPaste(text) {
+    const ctl = new AbortController();
+    importJob = { status: 'reading', file: '', message: 'Reading your list…', ctl };
+    renderImport();
+    readList({ text, name: '', isImage: false, ctl, pasted: true });
+  }
+  async function readList({ text, name, isImage, file, ctl, pasted }) {
+    const where = pasted ? 'what you pasted' : `“${name}”`;
+    let note = '';
     if (!isImage && !hasGreek(text)) {
-      importJob = { status: 'error', message: `No Greek text found in “${file.name}”. If it’s a scan, try a photo of the page instead.` };
+      importJob = { status: 'error', pasted, message: pasted
+        ? 'There’s no Greek in what you pasted. Paste the AI’s answer with the word list.'
+        : `No Greek text found in “${name}”. If it’s a scan, ask an AI to turn it into a list, then paste it here.` };
       return renderImport();
     }
     if (text.length > 60000) { text = text.slice(0, 60000); note = 'only the first part of a long file was read'; }
 
     let items = null;
     const s = sampleFn ?? await sampleReady;
-    if (s && !sampleBlocked) {
+    // Claude reads messy files and photos. A pasted list is read here, unless the reader finds nothing in it.
+    if (s && !sampleBlocked && (!pasted || !parseList(text).length)) {
       importJob.message = 'Finding the words and sorting them into categories. This can take up to a minute…';
       renderImport();
       const prompt =
-        `Below is ${isImage ? 'a photo' : 'the text'} of a Greek learner's vocabulary file ("${file.name}"). Extract every Greek vocabulary item with its English meaning.\n` +
+        `Below is ${isImage ? 'a photo' : 'the text'} of a Greek learner's vocabulary ${pasted ? 'list' : `file ("${name}")`}. Extract every Greek vocabulary item with its English meaning.\n` +
         `- Take items from vocabulary lists and Greek–English pairs. Also take words a sentence glosses, like "Αν (if)". Skip instructions and fill-in-the-gap sentences. Useful dialogue words with an obvious meaning may be included, translated by you.\n` +
         `- Keep the Greek as written, with its article if it has one.\n` +
         `- "e": the short English meaning, as the file gives it when it does.\n` +
@@ -1461,9 +1688,9 @@
       return renderImport();
     }
     if (importJob?.ctl !== ctl) return;
-    if (!items) { items = parseLocally(text); if (items.length) note = [note, 'categories guessed from the spelling'].filter(Boolean).join(' · '); }
+    if (!items) items = parseList(text, name);
     if (!items.length) {
-      importJob = { status: 'error', message: `Couldn’t find word pairs in “${file.name}”. Put one word per line, like “η πόλη = city”.` };
+      importJob = { status: 'error', pasted, message: `Couldn’t find word pairs in ${where}. Use one word per line, like “η πόλη = city”, or copy the AI prompt below and ask an AI to make the list.` };
       return renderImport();
     }
     const seen = new Set(state.words.map(w => normGreek(w.g)));
@@ -1481,7 +1708,7 @@
       if (existing) it.c = existing.name;
       unique.push(it);
     }
-    importJob = { status: 'review', file: file.name, items: unique, dupes, note };
+    importJob = { status: 'review', file: name, pasted, items: unique, dupes, note };
     renderImport();
   }
 

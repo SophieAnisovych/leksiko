@@ -1,5 +1,5 @@
 // Keeps Λέξεις working offline. Bump CACHE when you want every device to drop its old copy.
-const CACHE = 'lexeis-v10';
+const CACHE = 'lexeis-v11';
 const APP_FILES = [
   './',
   'index.html',
@@ -8,6 +8,9 @@ const APP_FILES = [
   'data/words.js',
   'data/verbs.js',
   'manifest.json',
+  'class/',
+  'class/index.html',
+  'class/manifest.json',
   'icons/icon-180.png',
   'icons/icon-192.png',
   'icons/icon-512.png',
