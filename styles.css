@@ -34,11 +34,11 @@ body {
   justify-content: space-between;
   background: var(--olive-mist);
   margin-inline: -16px;
-  margin-top: calc(-1 * env(safe-area-inset-top, 0px));
+  /* Reaches up behind the status bar, so the top of the screen is one even olive. */
   padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
   padding-bottom: 8px;
   padding-inline: max(16px, calc((100vw - 960px) / 2));
-  box-shadow: 0 1px 0 var(--rule);
+  box-shadow: 0 1px 0 var(--rule), 0 6px 16px -9px rgba(102,112,85,.55);
   position: relative;
   z-index: 30;
 }
@@ -54,9 +54,10 @@ body {
   cursor: pointer;
 }
 .menu-btn {
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--deep-olive);
+  width: 44px;
+  height: 44px;
+  margin: -4px -11px -4px 0;  /* a big tap area, with the lines lined up to the edge of the content */
+  border: 0;
   background: transparent;
   border-radius: 0;
   padding: 0;
@@ -67,14 +68,14 @@ body {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 16px;
+  width: 22px;
   height: 1.5px;
-  margin: -0.75px 0 0 -8px;
+  margin: -0.75px 0 0 -11px;
   background: var(--deep-olive);
   transition: translate .2s ease .2s, rotate .2s ease, opacity .15s ease .4s;
 }
-.menu-btn span:nth-child(1) { translate: 0 -5px; }
-.menu-btn span:nth-child(3) { translate: 0 5px; }
+.menu-btn span:nth-child(1) { translate: 0 -7px; }
+.menu-btn span:nth-child(3) { translate: 0 7px; }
 .menu-open .menu-btn span { transition: opacity .15s ease, translate .2s ease .12s, rotate .22s ease .32s; }
 .menu-open .menu-btn span:nth-child(2) { opacity: 0; }
 .menu-open .menu-btn span:nth-child(1) { translate: 0 0; rotate: 45deg; }
@@ -99,7 +100,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   width: min(78vw, 340px);
   background: var(--olive-mist);
   transform: translateX(100%);
-  transition: transform .45s cubic-bezier(.2,.7,.2,1);
+  /* Hidden once it has slid away, so its shadow can't peek in at the right edge. */
+  visibility: hidden;
+  transition: transform .45s cubic-bezier(.2,.7,.2,1), visibility 0s linear .45s;
   z-index: 20;
   padding: calc(env(safe-area-inset-top, 0px) + 80px) 32px calc(env(safe-area-inset-bottom, 0px) + 32px);
   box-shadow: -18px 0 40px -24px rgba(102,112,85,.5);
@@ -107,7 +110,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   flex-direction: column;
 }
 .menu-open .scrim { opacity: 1; pointer-events: auto; }
-.menu-open .drawer { transform: translateX(0); }
+.menu-open .drawer {
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform .45s cubic-bezier(.2,.7,.2,1), visibility 0s;
+}
 .drawer button {
   font-family: var(--font-display);
   font-size: 1.45rem;

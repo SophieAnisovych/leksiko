@@ -17,7 +17,8 @@
   <meta name="apple-mobile-web-app-title" content="Λέξεις">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <style>
-    :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+    /* The header fills the status bar area itself (see .topbar), so only the bottom is padded. */
+    :root { box-sizing: border-box; padding-bottom: env(safe-area-inset-bottom, 0px); }
     [hidden] { display: none !important; }
   </style>
 </head>

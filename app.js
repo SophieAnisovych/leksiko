@@ -633,16 +633,33 @@
         </div>
       </section>`;
     paintVerb();
-    $('#main').querySelectorAll('[data-tense]').forEach(b => b.addEventListener('click', () => {
-      tense = b.dataset.tense;
-      try { localStorage.setItem(prefKey('tense'), tense); } catch {}
-      renderVerbs();
-    }));
+    $('#main').querySelectorAll('[data-tense]').forEach(b => b.addEventListener('click', () => setTense(b.dataset.tense)));
     $('#card-speak')?.addEventListener('click', () => { const w = currentVerb(); if (w) speakGreek(verbFront(w, tense).text); });
     $('#card-info').addEventListener('click', () => { const w = currentVerb(); if (w) openVerbInfo(w, tense); });
     $('#ans-no').addEventListener('click', () => answerVerb(false));
     $('#ans-yes').addEventListener('click', () => answerVerb(true));
     wireCard(answerVerb, () => !!currentVerb());
+  }
+
+  // Switching the tense keeps the verb that's on the card, so you can see it in every tense.
+  // The next verbs come from the new tense's own list.
+  function setTense(t) {
+    if (t === tense) return;
+    const keep = currentVerb();
+    tense = t;
+    try { localStorage.setItem(prefKey('tense'), tense); } catch {}
+    buildVerbDeck();
+    if (keep && hasTense(keep)) vdeck = [keep.id, ...vdeck.filter(id => id !== keep.id)];
+    else if (keep) toast(`${verbKey(keep.g)} ${verbData(keep) ? `isn’t used in the ${tenseInfo(t)[1].toLowerCase()}` : 'has no table for this tense yet'}. Here’s another verb.`, 3500);
+    vpos = 0;
+    $('#main').querySelectorAll('[data-tense]').forEach(b => {
+      const on = b.dataset.tense === tense;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+    $('#card')?.classList.remove('flipped');
+    $('#scene')?.classList.remove('is-flipped');
+    paintVerb();
   }
 
   function paintVerb() {
