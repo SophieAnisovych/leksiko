@@ -201,6 +201,7 @@
     <div class="scrim" id="scrim"></div>
     <nav class="drawer" id="drawer" aria-label="Main menu" inert>
       <button type="button" data-go="">Cards</button>
+      <button type="button" data-go="verbs">Verbs</button>
       <button type="button" data-go="categories">Categories</button>
       <button type="button" data-go="add">Add words</button>
       <button type="button" data-go="test">Test</button>
@@ -229,9 +230,13 @@
       if (e.key === 'ArrowRight') answer(true);
       if (e.key === 'ArrowLeft') answer(false);
     }
+    if (currentView === 'verbs' && !sheetOpen()) {
+      if (e.key === 'ArrowRight') answerVerb(true);
+      if (e.key === 'ArrowLeft') answerVerb(false);
+    }
   });
 
-  /* ---------- Routing (#categories, #c12, #add, #test) ---------- */
+  /* ---------- Routing (#verbs, #categories, #c12, #add, #test) ---------- */
   let currentView = '';
   let editing = false;
   function go(hash) {
@@ -241,7 +246,8 @@
   }
   function route() {
     const h = location.hash.slice(1);
-    if (h === 'categories') renderCategories();
+    if (h === 'verbs') renderVerbs();
+    else if (h === 'categories') renderCategories();
     else if (h === 'add') renderAdd();
     else if (h === 'test') renderTest();
     else if (/^c[a-z0-9]+$/.test(h) && catById(h)) renderCategory(h);
@@ -311,6 +317,68 @@
     else { w.s = 'learning'; w.k = Math.min(w.k || 0, SOLID_AFTER - 1); delete w.l; delete w.d; }
   }
 
+  const dotsFor = st => statusOf(st) === 'learning'
+    ? `<span class="dots" aria-label="${st.k || 0} of ${SOLID_AFTER}">${Array.from({ length: SOLID_AFTER }, (_, i) => `<i class="${i < (st.k || 0) ? 'on' : ''}"></i>`).join('')}</span>`
+    : '';
+  const infoButton = id => `<button class="info-btn" type="button" id="${id}" aria-label="About this verb" hidden>i</button>`;
+
+  // Drag a card: right = knew it, left = didn't know. A tap flips it.
+  function wireCard(onAnswer, hasWord, onFlip) {
+    const scene = $('#scene'), card = $('#card');
+    let sx = 0, sy = 0, dx = 0, down = false, dragged = false;
+    const yes = $('.verdict-yes', scene), no = $('.verdict-no', scene);
+    const showDrag = () => {
+      scene.style.translate = `${dx}px 0`;
+      scene.style.rotate = `${dx / 40}deg`;
+      yes.style.opacity = Math.max(0, Math.min(1, dx / 90));
+      no.style.opacity = Math.max(0, Math.min(1, -dx / 90));
+    };
+    card.addEventListener('pointerdown', e => {
+      if (!hasWord() || answering) return;
+      down = true; dragged = false; sx = e.clientX; sy = e.clientY; dx = 0;
+      scene.classList.add('dragging');
+    });
+    card.addEventListener('pointermove', e => {
+      if (!down) return;
+      const mx = e.clientX - sx, my = e.clientY - sy;
+      if (!dragged && Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(my)) { dragged = true; try { card.setPointerCapture(e.pointerId); } catch {} }
+      if (dragged) { dx = mx; showDrag(); }
+    });
+    const release = () => {
+      if (!down) return;
+      down = false;
+      scene.classList.remove('dragging');
+      if (dragged && Math.abs(dx) > 90) onAnswer(dx > 0);
+      else { dx = 0; showDrag(); }
+    };
+    card.addEventListener('pointerup', release);
+    card.addEventListener('pointercancel', release);
+    card.addEventListener('click', () => {
+      if (dragged) { dragged = false; return; }
+      card.classList.toggle('flipped');
+      scene.classList.toggle('is-flipped', card.classList.contains('flipped'));
+      onFlip?.();
+    });
+  }
+  // Send the card off to the right or left, then show the next one.
+  function flyAway(knew, next) {
+    const scene = $('#scene'), card = $('#card');
+    scene.classList.add(knew ? 'fly-right' : 'fly-left');
+    setTimeout(() => {
+      scene.classList.add('no-anim');
+      scene.classList.remove('fly-right', 'fly-left');
+      scene.style.translate = ''; scene.style.rotate = '';
+      scene.querySelectorAll('.verdict').forEach(v => { v.style.opacity = ''; });
+      card.classList.remove('flipped');
+      scene.classList.remove('is-flipped');
+      next();
+      scene.classList.add('enter');
+      void scene.offsetWidth;
+      scene.classList.remove('no-anim', 'enter');
+      answering = false;
+    }, 260);
+  }
+
   /* ---------- Card deck ---------- */
   const PILES = [['all', 'All'], ['new', 'New'], ['learning', 'Absorbing'], ['solid', 'Solid']];
   let pile = 'all';
@@ -357,6 +425,7 @@
         </div>
         <div class="scene" id="scene">
           <button class="card" id="card" type="button"></button>
+          ${infoButton('card-info')}
           ${speakButton('card-speak', 'Hear it in Greek')}
           <div class="verdict verdict-yes" aria-hidden="true">Knew it</div>
           <div class="verdict verdict-no" aria-hidden="true">Didn’t know</div>
@@ -368,6 +437,7 @@
         </div>
       </section>`;
     paintCard();
+    $('#card-info').addEventListener('click', () => { const w = currentWord(); if (w) openVerbInfo(w, 'pres'); });
     $('#main').querySelectorAll('[data-pile]').forEach(b => b.addEventListener('click', () => {
       pile = b.dataset.pile;
       try { localStorage.setItem('lexeis-pile', pile); } catch {}
@@ -379,42 +449,7 @@
     $('#ans-no').addEventListener('click', () => answer(false));
     $('#ans-yes').addEventListener('click', () => answer(true));
 
-    // Drag the card: right = knew it, left = didn't know.
-    const scene = $('#scene'), card = $('#card');
-    let sx = 0, sy = 0, dx = 0, down = false, dragged = false;
-    const yes = $('.verdict-yes', scene), no = $('.verdict-no', scene);
-    const showDrag = () => {
-      scene.style.translate = `${dx}px 0`;
-      scene.style.rotate = `${dx / 40}deg`;
-      yes.style.opacity = Math.max(0, Math.min(1, dx / 90));
-      no.style.opacity = Math.max(0, Math.min(1, -dx / 90));
-    };
-    card.addEventListener('pointerdown', e => {
-      if (!currentWord() || answering) return;
-      down = true; dragged = false; sx = e.clientX; sy = e.clientY; dx = 0;
-      scene.classList.add('dragging');
-    });
-    card.addEventListener('pointermove', e => {
-      if (!down) return;
-      const mx = e.clientX - sx, my = e.clientY - sy;
-      if (!dragged && Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(my)) { dragged = true; try { card.setPointerCapture(e.pointerId); } catch {} }
-      if (dragged) { dx = mx; showDrag(); }
-    });
-    const release = () => {
-      if (!down) return;
-      down = false;
-      scene.classList.remove('dragging');
-      if (dragged && Math.abs(dx) > 90) answer(dx > 0);
-      else { dx = 0; showDrag(); }
-    };
-    card.addEventListener('pointerup', release);
-    card.addEventListener('pointercancel', release);
-    card.addEventListener('click', () => {
-      if (dragged) { dragged = false; return; }
-      card.classList.toggle('flipped');
-      scene.classList.toggle('is-flipped', card.classList.contains('flipped'));
-      labelCard();
-    });
+    wireCard(answer, () => !!currentWord(), labelCard);
   }
   function currentWord() {
     deck = deck.filter(id => state.words.some(w => w.id === id));
@@ -427,6 +462,8 @@
     if (!card) return;
     const w = currentWord();
     ['#ans-no', '#ans-yes'].forEach(id => { const b = $(id); if (b) b.disabled = !w; });
+    const info = $('#card-info');
+    if (info) info.hidden = !verbData(w);
     if (!w) {
       const anyHere = state.words.some(inStudyCat);
       const msg = !anyHere ? 'No words here yet'
@@ -436,9 +473,7 @@
       return;
     }
     const st = statusOf(w);
-    const dots = st === 'learning'
-      ? `<span class="dots" aria-label="${w.k || 0} of ${SOLID_AFTER}">${Array.from({ length: SOLID_AFTER }, (_, i) => `<i class="${i < (w.k || 0) ? 'on' : ''}"></i>`).join('')}</span>`
-      : '';
+    const dots = dotsFor(w);
     card.innerHTML = `
       <div class="face front">
         <div class="word" lang="el" style="--fs:${fitSize(w.g)}">${esc(w.g)}</div>
@@ -460,7 +495,7 @@
   }
   let answering = false;
   function answer(knew) {
-    const scene = $('#scene'), card = $('#card'), w = currentWord();
+    const scene = $('#scene'), w = currentWord();
     if (!scene || !w || answering) return;
     answering = true;
     const before = statusOf(w);
@@ -470,23 +505,12 @@
     save(null);
     toast(after === 'solid' && before !== 'solid' ? `${w.g} is solid now` : (knew ? 'Knew it' : 'Didn’t know'), 4000,
       { label: 'Undo', fn: () => undoAnswer(snapshot) });
-    scene.classList.add(knew ? 'fly-right' : 'fly-left');
-    setTimeout(() => {
+    flyAway(knew, () => {
       pos += 1;
       if (pos >= deck.length) buildDeck();
-      scene.classList.add('no-anim');
-      scene.classList.remove('fly-right', 'fly-left');
-      scene.style.translate = ''; scene.style.rotate = '';
-      scene.querySelectorAll('.verdict').forEach(v => { v.style.opacity = ''; });
-      card.classList.remove('flipped');
-      scene.classList.remove('is-flipped');
       paintCard();
       refreshPiles();
-      scene.classList.add('enter');
-      void scene.offsetWidth;
-      scene.classList.remove('no-anim', 'enter');
-      answering = false;
-    }, 260);
+    });
   }
 
   function undoAnswer(snap) {
@@ -500,6 +524,233 @@
   }
   function refreshPiles() {
     $('#main').querySelectorAll('[data-pile] span').forEach(sp => { sp.textContent = pileCount(sp.parentElement.dataset.pile); });
+  }
+
+  /* ---------- Verbs: one tense at a time ---------- */
+  // Conjugation tables come from data/verbs.js, keyed by the verb's first form ("ρωτάω" for "ρωτάω / ρωτώ").
+  const VERBS = window.LEXEIS_VERBS || {};
+  const verbKey = g => String(g || '').split('/')[0].replace(/\([^)]*\)/g, '').trim().toLowerCase().normalize('NFC');
+  const verbData = w => (w && VERBS[verbKey(w.g)]) || null;
+  const TENSES = [
+    ['pres', 'Present', 'Ενεστώτας'],
+    ['imp', 'Past continuous', 'Παρατατικός'],
+    ['aor', 'Simple past', 'Αόριστος'],
+    ['futc', 'Future continuous', 'Εξακολουθητικός μέλλοντας'],
+    ['fut', 'Simple future', 'Στιγμιαίος μέλλοντας'],
+  ];
+  const tenseInfo = t => TENSES.find(([k]) => k === t) || TENSES[0];
+  const PERSONS = [['εγώ', 'I'], ['εσύ', 'you'], ['αυτός/-ή/-ό', 'he, she, it'], ['εμείς', 'we'], ['εσείς', 'you (plural)'], ['αυτοί/-ές/-ά', 'they']];
+  const GROUPS = {
+    A: 'Group A: ends in -ω, with the stress before the ending.',
+    B1: 'Group B1: ends in -άω / -ώ. The past continuous ends in -ούσα and the simple past usually in -ησα.',
+    B2: 'Group B2: ends in -ώ, -είς. The past continuous ends in -ούσα.',
+    P: 'Ends in -ομαι: the endings look passive, but the meaning is active.',
+    PA: 'Ends in -άμαι: the endings look passive, but the meaning is active.',
+    irr: 'Irregular verb.',
+  };
+  function tenseForms(v, t) {
+    if (!v) return null;
+    if (t === 'futc') { const base = v.futc || v.pres; return base ? base.map(f => 'θα ' + f) : null; }
+    if (t === 'fut') return v.fut ? v.fut.map(f => 'θα ' + f) : null;
+    return v[t] || null;
+  }
+  const isVerb = w => w.c === 'c1' || catById(w.c)?.name === 'Verbs' || !!verbData(w);
+  // The present shares the word's own progress (the same as on Cards). Every other tense has its own.
+  const peekStatus = (w, t) => t === 'pres' ? w : ((w.t && w.t[t]) || {});
+  function tenseStatus(w, t) {
+    if (t === 'pres') return w;
+    w.t = w.t || {};
+    return (w.t[t] = w.t[t] || {});
+  }
+  function verbFront(w, t) {
+    const v = verbData(w);
+    if (t === 'pres' || !v) return { text: w.g, ipa: w.p };
+    const forms = tenseForms(v, t);
+    const text = (v.front || [0]).map(i => forms[i]).join(' / ');
+    return { text, ipa: phraseIpa(text) };
+  }
+  const verbEnglish = (w, t) => verbData(w)?.en?.[t] || w.e;
+
+  let tense = 'pres';
+  try { const t = localStorage.getItem('lexeis-tense'); if (TENSES.some(([k]) => k === t)) tense = t; } catch {}
+  let vdeck = [];
+  let vpos = 0;
+  const hasTense = w => tense === 'pres' || !!tenseForms(verbData(w), tense);
+  function buildVerbDeck() {
+    // A random verb that isn't solid yet in this tense, then solid ones that are due for review.
+    const vs = state.words.filter(w => isVerb(w) && hasTense(w));
+    const learning = vs.filter(w => statusOf(peekStatus(w, tense)) !== 'solid');
+    const due = vs.filter(w => isDue(peekStatus(w, tense)));
+    vdeck = [...shuffle(learning.map(w => w.id)), ...shuffle(due.map(w => w.id))];
+    vpos = 0;
+  }
+  function currentVerb() {
+    vdeck = vdeck.filter(id => state.words.some(w => w.id === id));
+    if (!vdeck.length) return null;
+    vpos = ((vpos % vdeck.length) + vdeck.length) % vdeck.length;
+    return state.words.find(w => w.id === vdeck[vpos]);
+  }
+
+  function renderVerbs() {
+    currentView = 'verbs';
+    buildVerbDeck();
+    $('#main').innerHTML = `
+      <section class="view-cards">
+        <div class="piles tenses" role="group" aria-label="Tense">
+          ${TENSES.map(([k, label]) => `<button type="button" class="pile${k === tense ? ' on' : ''}" data-tense="${k}" aria-pressed="${k === tense}">${label}</button>`).join('')}
+        </div>
+        <p class="verb-count" id="verb-count"></p>
+        <div class="scene" id="scene">
+          <button class="card" id="card" type="button"></button>
+          ${infoButton('card-info')}
+          ${speakButton('card-speak', 'Hear it in Greek')}
+          <div class="verdict verdict-yes" aria-hidden="true">Knew it</div>
+          <div class="verdict verdict-no" aria-hidden="true">Didn’t know</div>
+        </div>
+        <div class="answers">
+          <button class="answer" type="button" id="ans-no">← Didn’t know</button>
+          <span class="hint">tap the card to flip</span>
+          <button class="answer" type="button" id="ans-yes">Knew it →</button>
+        </div>
+      </section>`;
+    paintVerb();
+    $('#main').querySelectorAll('[data-tense]').forEach(b => b.addEventListener('click', () => {
+      tense = b.dataset.tense;
+      try { localStorage.setItem('lexeis-tense', tense); } catch {}
+      renderVerbs();
+    }));
+    $('#card-speak')?.addEventListener('click', () => { const w = currentVerb(); if (w) speakGreek(verbFront(w, tense).text); });
+    $('#card-info').addEventListener('click', () => { const w = currentVerb(); if (w) openVerbInfo(w, tense); });
+    $('#ans-no').addEventListener('click', () => answerVerb(false));
+    $('#ans-yes').addEventListener('click', () => answerVerb(true));
+    wireCard(answerVerb, () => !!currentVerb());
+  }
+
+  function paintVerb() {
+    const card = $('#card');
+    if (!card) return;
+    const w = currentVerb();
+    ['#ans-no', '#ans-yes'].forEach(id => { const b = $(id); if (b) b.disabled = !w; });
+    const info = $('#card-info');
+    if (info) info.hidden = !w;
+    const vs = state.words.filter(isVerb);
+    const inTense = vs.filter(hasTense);
+    const solid = inTense.filter(x => statusOf(peekStatus(x, tense)) === 'solid').length;
+    const noTable = vs.length - inTense.length;
+    const count = $('#verb-count');
+    if (count) count.textContent = `${inTense.length - solid} to learn · ${solid} solid` + (noTable ? ` · ${noTable} not used in this tense` : '');
+    if (!w) {
+      const msg = vs.length ? `All caught up in the ${tenseInfo(tense)[1].toLowerCase()}. Solid verbs come back when they’re due.` : 'No verbs yet';
+      card.innerHTML = `<div class="face front"><div class="word" style="--fs:6.6">${msg}</div></div>`;
+      return;
+    }
+    const st = peekStatus(w, tense);
+    const s = statusOf(st);
+    const front = verbFront(w, tense);
+    const english = verbEnglish(w, tense);
+    const label = tenseInfo(tense)[1];
+    card.innerHTML = `
+      <div class="face front">
+        <div class="tense-label">${label}</div>
+        <div class="word" lang="el" style="--fs:${fitSize(front.text)}">${esc(front.text)}</div>
+        ${front.ipa ? `<div class="ipa">${esc(front.ipa)}</div>` : ''}
+        <div class="tag status-${s}">${STATUS[s]}${s === 'solid' && isDue(st) ? ' · review' : ''}${dotsFor(st)}</div>
+      </div>
+      <div class="face back">
+        <div class="tense-label">${label}</div>
+        <div class="word" style="--fs:${fitSize(english)}">${esc(english)}</div>
+        <div class="verb-gloss"><span lang="el">${esc(w.g)}</span> · ${esc(w.e)}</div>
+        <div class="tag">English</div>
+      </div>`;
+    card.setAttribute('aria-label', `${label}: ${front.text}. Tap to show English.`);
+  }
+
+  function answerVerb(knew) {
+    const w = currentVerb();
+    if (!$('#scene') || !w || answering) return;
+    answering = true;
+    const t = tense;
+    const st = tenseStatus(w, t);
+    const before = statusOf(st);
+    const snapshot = { id: w.id, t, pos: vpos, fields: { s: st.s, k: st.k, l: st.l, d: st.d } };
+    review(st, knew);
+    save(null);
+    const solidNow = statusOf(st) === 'solid' && before !== 'solid';
+    toast(solidNow ? `${verbKey(w.g)} is solid in the ${tenseInfo(t)[1].toLowerCase()} now` : (knew ? 'Knew it' : 'Didn’t know'), 4000,
+      { label: 'Undo', fn: () => undoVerb(snapshot) });
+    flyAway(knew, () => {
+      vpos += 1;
+      if (vpos >= vdeck.length) buildVerbDeck();
+      paintVerb();
+    });
+  }
+  function undoVerb(snap) {
+    const w = state.words.find(x => x.id === snap.id);
+    if (!w) return;
+    const st = tenseStatus(w, snap.t);
+    for (const [f, v] of Object.entries(snap.fields)) { if (v === undefined) delete st[f]; else st[f] = v; }
+    save(null);
+    if (currentView !== 'verbs' || snap.t !== tense) return;
+    if (vdeck[snap.pos] === w.id) vpos = snap.pos;
+    else { vdeck = vdeck.filter(id => id !== w.id); vpos = Math.min(vpos, vdeck.length); vdeck.splice(vpos, 0, w.id); }
+    $('#card')?.classList.remove('flipped');
+    $('#scene')?.classList.remove('is-flipped');
+    paintVerb();
+  }
+
+  /* ---------- Verb info pop-up ---------- */
+  function verbInfoLines(v) {
+    const lines = [esc(GROUPS[v.group] || '')];
+    if (v.note) lines.push(esc(v.note));
+    const withAugment = [v.imp, v.aor].find(a => a && /^[έή]/.test(a[0]) && a[3] && a[3][0] !== a[0][0]);
+    if (withAugment) lines.push(`In the past, ${esc(withAugment[0][0])}- is added when the stress needs it: <span lang="el">${esc(withAugment[0])}</span>, but <span lang="el">${esc(withAugment[3])}</span>.`);
+    const key = [...new Set([v.pres?.[0], v.imp?.[0], v.aor?.[0], v.fut?.[0] && 'θα ' + v.fut[0]].filter(Boolean))];
+    lines.push(`Key forms: <span lang="el">${key.map(esc).join(' · ')}</span>`);
+    return lines;
+  }
+  function openVerbInfo(w, startTense) {
+    const v = verbData(w);
+    let t = startTense;
+    closeSheet();
+    const scrim = document.createElement('div');
+    scrim.className = 'sheet-scrim popup-scrim';
+    scrim.innerHTML = `<div class="sheet popup" role="dialog" aria-modal="true" aria-label="About ${esc(w.g)}"></div>`;
+    scrim.addEventListener('click', e => { if (e.target === scrim) closeSheet(); });
+    document.body.appendChild(scrim);
+    const box = scrim.firstElementChild;
+    const draw = () => {
+      const forms = tenseForms(v, t);
+      const [, label, greek] = tenseInfo(t);
+      box.innerHTML = `
+        <div class="popup-head">
+          <div class="popup-title">
+            <h3 class="popup-word" lang="el">${esc(w.g)}</h3>
+            <div class="popup-sub">${w.p ? `<span class="popup-ipa">${esc(w.p)}</span> · ` : ''}${esc(w.e)}</div>
+          </div>
+          <button class="popup-close" type="button" aria-label="Close">×</button>
+        </div>
+        ${v ? `
+          <div class="popup-info">${verbInfoLines(v).map(l => `<p>${l}</p>`).join('')}</div>
+          <div class="piles left popup-tenses" role="group" aria-label="Tense">
+            ${TENSES.map(([k, l]) => `<button type="button" class="pile${k === t ? ' on' : ''}" data-ptense="${k}" aria-pressed="${k === t}">${l}</button>`).join('')}
+          </div>
+          <p class="popup-tense">${label} · <span lang="el">${greek}</span></p>
+          ${forms ? `<div class="conj">
+            ${forms.map((f, i) => `<button class="conj-row" type="button" data-say="${esc(f)}" aria-label="${esc(PERSONS[i][1])}: ${esc(f)}. Tap to hear it.">
+              <span class="cp" lang="el">${PERSONS[i][0]}</span>
+              <span class="cf" lang="el">${esc(f)}</span>
+              <span class="ce">${PERSONS[i][1]}</span>
+              <span class="cf-ipa">${esc(phraseIpa(f))}</span>
+            </button>`).join('')}
+          </div>
+          <p class="popup-hint">${synth ? 'Tap a line to hear it.' : ''}</p>` : `<p class="popup-info">${esc(verbKey(w.g))} isn’t used in the ${label.toLowerCase()}.</p>`}`
+        : '<p class="popup-info">There’s no conjugation table for this verb yet.</p>'}`;
+      box.querySelector('.popup-close').addEventListener('click', closeSheet);
+      box.querySelectorAll('[data-ptense]').forEach(b => b.addEventListener('click', () => { t = b.dataset.ptense; draw(); }));
+      box.querySelectorAll('[data-say]').forEach(b => b.addEventListener('click', () => speakGreek(b.dataset.say)));
+    };
+    draw();
+    box.querySelector('.popup-close').focus();
   }
 
   /* ---------- Edit toggle ---------- */

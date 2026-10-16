@@ -23,6 +23,7 @@ The home-screen app keeps its own saved words, separate from the Safari page, so
 | `styles.css` | Colours (Mediterranean Calm palette), fonts and layout |
 | `app.js` | Cards, categories, editing, Add words and file import |
 | `data/words.js` | The starting word list: 549 words in 20 categories |
+| `data/verbs.js` | Conjugation tables for the 57 verbs, in five tenses |
 | `manifest.json`, `icons/` | App name, colours and home-screen icon |
 | `sw.js` | Keeps the app working offline |
 
@@ -38,6 +39,7 @@ The home-screen app keeps its own saved words, separate from the Safari page, so
 - Swipe right (**Knew it**) or left (**Didn't know**). A word goes **New → Absorbing** on its first swipe and becomes **Solid** after three "knew it" in a row.
 - Solid words come back for review after 3, 7, 21 and 60 days. A "didn't know" sends a word back to Absorbing.
 - Tap the speaker on a card, or any word in a category, to hear it with the device's Greek voice. If nothing plays on an iPad, add a voice in **Settings → Accessibility → Spoken Content → Voices → Greek**.
+- **Verbs** (in the menu) shows one verb at a time in the tense you pick: present, past continuous, simple past, future continuous or simple future. It works like the cards, and each tense keeps its own New / Absorbing / Solid progress (the present shares the word's progress on Cards). The **i** button on the card shows a short note about the verb and the whole tense in all six persons; tap a line to hear it.
 - **Test** asks multiple-choice or flip-and-check questions. Multiple-choice answers can move a word forward but never make it Solid; flip-and-check counts fully.
 
 ## Where your changes are saved
