@@ -11,11 +11,15 @@
   --font-soft: "Literata", Georgia, serif;
   --font-ipa: "Gentium Book Plus", "Charis SIL", "Doulos SIL", Georgia, serif; /* one face with every IPA symbol */
   --card-ratio: 0.68;
+  --bar-h: calc(env(safe-area-inset-top, 0px) + 52px); /* header height, status bar included */
   color-scheme: light;
 }
 html, body { height: 100%; }
+html { overscroll-behavior: none; }
 body {
-  background: var(--linen);
+  /* iPadOS tints the strip behind the clock with the page colour, so the page colour is olive
+     to match the header; the linen layer covers everything below the header. */
+  background: linear-gradient(var(--linen), var(--linen)) 0 calc(var(--bar-h) - 1px) / 100% 100% no-repeat var(--olive-mist);
   color: var(--deep-olive);
   font-family: var(--font-soft);
   margin: 0;
@@ -35,11 +39,15 @@ body {
   background: var(--olive-mist);
   margin-inline: -16px;
   /* Reaches up behind the status bar, so the top of the screen is one even olive. */
+  height: var(--bar-h);
+  box-sizing: border-box;
   padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
   padding-bottom: 8px;
   padding-inline: max(16px, calc((100vw - 960px) / 2));
   box-shadow: 0 1px 0 var(--rule), 0 6px 16px -9px rgba(102,112,85,.55);
-  position: relative;
+  /* Sticky (it never actually moves) so iPadOS recognises it as the bar at the top and uses its colour. */
+  position: sticky;
+  top: 0;
   z-index: 30;
 }
 .app-name {
@@ -325,7 +333,9 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .sheet-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(102,112,85,.28);
+  /* Dims the page below the header only, like the menu does, so the top of the screen stays one olive. */
+  background: linear-gradient(transparent var(--bar-h), rgba(102,112,85,.28) var(--bar-h));
+  padding-top: var(--bar-h);
   z-index: 40;
   display: flex;
   align-items: flex-end;
@@ -696,7 +706,7 @@ button.word-row.listen:active { background: var(--sand); }
 .verb-count { margin: -4px 0 0; font-style: italic; font-size: 0.95rem; text-align: center; }
 
 /* Verb info pop-up */
-.popup-scrim { align-items: center; padding: 16px; }
+.popup-scrim { align-items: center; padding: calc(var(--bar-h) + 16px) 16px 16px; }
 .sheet.popup {
   width: min(100%, 540px);
   max-height: min(90%, 820px);
